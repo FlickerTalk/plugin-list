@@ -41,6 +41,12 @@ export function fakeCore({ quota = 4 * 1024 * 1024, lang = "en" } = {}) {
     shut() {
       core.listening = false;
     },
+    /** A new frame for the same plugin on the same phone: the old one's handlers are gone. */
+    reload() {
+      core.listening = false;
+      openers.length = 0;
+      hearers.length = 0;
+    },
     /** What the twin said, handed to this frame. */
     async hear(data) {
       if (!core.listening) return;
