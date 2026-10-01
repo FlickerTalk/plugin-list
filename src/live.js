@@ -20,6 +20,8 @@
 //   apply(payload)             takes what the twin sent; throws on garbage
 //   onChange(fn) → unsubscribe  calls fn(payload) for each change made on this phone, never for
 //                               what `apply` took
+// Wiring, in a plugin: `ft.live.onMessage(inOrder(async (data) => { const message = inbox.take(data);
+// … session.hear(message) … }))`, with one `Inbox` per plugin and one `LiveSession` per document.
 // Copy this file as it is; the format name is a parameter.
 
 /** The version of the protocol this file speaks. A newer version must keep reading 1. */
@@ -81,6 +83,19 @@ export function decode(data, format) {
 /** Whether a message speaks a newer protocol than this one: then it is not applied. */
 export function isNewer(message) {
   return Boolean(message) && message.v > VERSION;
+}
+
+/**
+ * Wraps the handler of `ft.live.onMessage` so messages are handled one after another, in the
+ * order they came: the frame hands each one over without waiting for the one before. A handler
+ * that fails does not stop the next.
+ */
+export function inOrder(handler) {
+  let chain = Promise.resolve();
+  return (...args) => {
+    chain = chain.then(() => handler(...args)).catch(() => {});
+    return chain;
+  };
 }
 
 const partId = () => `${Date.now().toString(36)}${Math.floor(Math.random() * 36 ** 6).toString(36)}`;

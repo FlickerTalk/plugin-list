@@ -4,7 +4,7 @@
 // the protocol does not care what is kept. Copy this file with `src/live.js` and
 // `test/fake-core.js`; it names nothing of List.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ACK_WAIT, BYE, HELLO, Inbox, LiveSession, PART, PART_SIZE, SYNC, UPDATE, VERSION, decode, encode, fromBase64, isNewer, newWho, split, toBase64 } from "../src/live.js";
+import { ACK_WAIT, BYE, HELLO, Inbox, LiveSession, PART, PART_SIZE, SYNC, UPDATE, VERSION, decode, encode, fromBase64, inOrder, isNewer, newWho, split, toBase64 } from "../src/live.js";
 import { LIVE_LIMIT, connect, fakeCore } from "./fake-core.js";
 
 const FORMAT = "fttest";
@@ -181,6 +181,21 @@ describe("the parts", () => {
   });
 });
 
+describe("handling what arrives", () => {
+  it("goes one message after another, in order, even when one is slow or fails", async () => {
+    const done = [];
+    const handle = inOrder(async (name, wait) => {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      if (name === "broken") throw new Error("broken");
+      done.push(name);
+    });
+    // The frame calls the handler for each message without waiting for the one before.
+    const all = [handle("first", 20), handle("broken", 0), handle("second", 0)];
+    await Promise.all(all);
+    expect(done).toEqual(["first", "second"]);
+  });
+});
+
 describe("the versions", () => {
   it("passes a newer message on untouched, so the plugin can say to update, and never applies it", async () => {
     const newer = encode(base({ k: UPDATE, v: VERSION + 1, u: JSON.stringify(["from the future"]) }));
@@ -208,8 +223,9 @@ describe("two phones", () => {
   it("meet: a hello, a sync each way, and both have everything", async () => {
     const { link, one, two } = await pair({ a: ["milk"], b: ["bread"] });
     expect(await one.start()).toBe(true);
-    expect(one.statuses).toEqual(["waiting"]);
+    expect(one.statuses[0]).toBe("waiting");
     await link.idle();
+    expect(one.statuses).toEqual(["waiting", "joined"]);
     expect(one.replica.sorted()).toEqual(["bread", "milk"]);
     expect(two.replica.sorted()).toEqual(["bread", "milk"]);
     expect(one.session.status).toBe("joined");

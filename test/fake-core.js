@@ -47,10 +47,14 @@ export function fakeCore({ quota = 4 * 1024 * 1024, lang = "en" } = {}) {
       openers.length = 0;
       hearers.length = 0;
     },
-    /** What the twin said, handed to this frame. */
-    async hear(data) {
-      if (!core.listening) return;
-      for (const handler of hearers) await handler(data);
+    /**
+     * What the twin said, handed to this frame. As in the real frame, every handler is called at
+     * once and not awaited: a second message can arrive while the first is still being handled.
+     * The promise only lets a test wait for the handlers to finish.
+     */
+    hear(data) {
+      if (!core.listening) return Promise.resolve();
+      return Promise.all(hearers.map((handler) => handler(data)));
     },
     used() {
       let total = 0;
@@ -108,11 +112,10 @@ export function fakeCore({ quota = 4 * 1024 * 1024, lang = "en" } = {}) {
 
 /**
  * Joins two cores as the two phones of one conversation. What one sends reaches the other in
- * order, asynchronously, as over the direct connection. `down()` is a phone in airplane mode:
+ * order, asynchronously, as over the direct connection, and is handled as the real frame does. `down()` is a phone in airplane mode:
  * sends answer `false`; `up()` brings it back. `idle()` waits until nothing is on the way.
  */
 export function connect(a, b) {
-  let pending = Promise.resolve();
   let inFlight = 0;
   const link = {
     isUp: true,
@@ -127,19 +130,20 @@ export function connect(a, b) {
       const to = from === a ? b : a;
       link.carried.push({ from, data });
       inFlight += 1;
-      pending = pending.then(async () => {
-        try {
-          await to.hear(data);
-        } finally {
-          inFlight -= 1;
-        }
+      // Delivered in order, each one as soon as it is on the other side, without waiting for
+      // the handling of the one before.
+      queueMicrotask(() => {
+        Promise.resolve(to.hear(data))
+          .catch(() => {})
+          .finally(() => {
+            inFlight -= 1;
+          });
       });
     },
     /** Waits until nothing is on the way and nothing new set off for a while (in microtasks). */
     async idle() {
       let quiet = 0;
       for (let round = 0; round < 10_000; round += 1) {
-        await pending;
         await new Promise((resolve) => queueMicrotask(resolve));
         quiet = inFlight === 0 ? quiet + 1 : 0;
         if (quiet >= 50) return;
