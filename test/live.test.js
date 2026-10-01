@@ -123,6 +123,21 @@ describe("the envelope", () => {
     expect(decode(undefined, FORMAT)).toBeNull();
   });
 
+  it("refuses a document or participant id outside a closed format: they become record keys", () => {
+    for (const bad of ["a/b", "", "x".repeat(65), "two words", "nul\u0000", "dot.dot", "../up", "ü"]) {
+      expect(decode(encode(base({ k: HELLO, doc: bad })), FORMAT), `doc ${JSON.stringify(bad)}`).toBeNull();
+      expect(decode(encode(base({ k: HELLO, who: bad })), FORMAT), `who ${JSON.stringify(bad)}`).toBeNull();
+    }
+    for (const good of ["x", "x".repeat(64), "0000abcdefxyz12", "A-b_9", newWho()]) {
+      expect(decode(encode(base({ k: HELLO, doc: good, who: good })), FORMAT)).not.toBeNull();
+    }
+    // A part's id too, and a whole put back together must meet the same rules.
+    const inbox = new Inbox(FORMAT);
+    expect(inbox.take(encode(base({ k: PART, id: "a/b", n: 1, i: 0, data: encode(base({ k: HELLO })) })))).toBeNull();
+    expect(inbox.take(encode(base({ k: PART, id: "x".repeat(65), n: 1, i: 0, data: encode(base({ k: HELLO })) })))).toBeNull();
+    expect(inbox.take(encode(base({ k: PART, id: "ok", n: 1, i: 0, data: encode(base({ k: HELLO })) })))).toMatchObject({ k: HELLO });
+  });
+
   it("keeps fields it does not know, so a newer twin's extras do no harm", () => {
     expect(decode(encode(base({ k: HELLO, later: { x: 1 } })), FORMAT).later).toEqual({ x: 1 });
   });

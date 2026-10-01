@@ -76,6 +76,9 @@ is an envelope, JSON → UTF-8 → base64:
 
 - `p` the format (anything else is ignored), `v` the protocol version, `k` the kind, `doc` the
   document, `who` a random id of the participant **per document**, `app` the plugin's version.
+- `doc`, `who` and a part's `id` are 1 to 64 characters of `A-Z a-z 0-9 _ -`. What comes from the
+  other phone is untrusted, and a document id becomes part of record keys: a message with any
+  other id is dropped as garbage.
 - Kinds: `hello` (carries `sv`, what this side has; waits about 8 s for an answer), `sync` (`u`,
   what the other lacks, and `sv` when it answers a hello), `update` (`u`, a change as it happens),
   `part` (`id`, `n`, `i`, `data`: a piece of a message that does not fit in 48 KiB), `bye`.

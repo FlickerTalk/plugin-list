@@ -338,6 +338,21 @@ describe("two phones", () => {
     expect(inside(b).querySelector("[data-invite]").textContent).toBe("");
   });
 
+  it("ignore a hello whose list id could not be a record key, and write nothing", async () => {
+    const coreB = fakeCore();
+    const b = await phone(coreB);
+    for (const doc of ["a/b", "", "x".repeat(200), "has space", "nul\u0000"]) {
+      await coreB.hear(encode({ p: "ftlist", v: VERSION, k: HELLO, doc, who: "w", app: "1.0.0", sv: "AA==", title: "Evil" }));
+    }
+    await settle(b);
+    expect(b.list).toBeNull();
+    expect(coreB.records.size).toBe(0);
+    expect(coreB.ft.records.set).not.toHaveBeenCalled();
+    expect(coreB.ft.records.get).not.toHaveBeenCalled();
+    expect(coreB.sent).toHaveLength(0);
+    expect(inside(b).textContent).not.toContain("Evil");
+  });
+
   it("ignore a resumed hello for a list this phone never had", async () => {
     const coreB = fakeCore();
     const b = await phone(coreB);

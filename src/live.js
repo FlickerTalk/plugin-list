@@ -6,7 +6,8 @@
 // - every message is an envelope `{ p, v, k, doc, who, app, … }` as JSON → UTF-8 → base64, where
 //   `p` is the plugin's format (anything else is ignored), `v` the protocol version, `k` the kind,
 //   `doc` the document, `who` a random id of the participant for that document, `app` the
-//   plugin's version (only to say "update");
+//   plugin's version (only to say "update"); `doc`, `who` and a part's `id` are 1 to 64 of
+//   `A-Z a-z 0-9 _ -` (`ID`), or the message is dropped;
 // - kinds: `hello` (what I have; waits ~8 s for an answer), `sync` (what you lack, and what I
 //   have when it answers a hello), `update` (a change as it happens), `part` (a piece of what does
 //   not fit in the core's 48 KiB), `bye`. Unknown kinds and fields are ignored; a newer `v` is
@@ -38,6 +39,13 @@ export const PART = "part";
 export const BYE = "bye";
 
 const KINDS = new Set([HELLO, SYNC, UPDATE, BYE]);
+
+/**
+ * The shape of a document, participant or part id. What the twin sends is untrusted input, and a
+ * document id ends up in record keys (`list/<doc>/meta`): anything else is dropped as garbage.
+ */
+export const ID = /^[A-Za-z0-9_-]{1,64}$/;
+export const isId = (value) => typeof value === "string" && ID.test(value);
 
 /** Bytes as base64 and back: what `ft.live` and `ft.records` carry. */
 export function toBase64(bytes) {
@@ -76,7 +84,7 @@ export function decode(data, format) {
   }
   if (!message || typeof message !== "object" || Array.isArray(message)) return null;
   if (message.p !== format || !Number.isInteger(message.v) || message.v < 1) return null;
-  if (typeof message.k !== "string" || typeof message.doc !== "string" || typeof message.who !== "string") return null;
+  if (typeof message.k !== "string" || !isId(message.doc) || !isId(message.who)) return null;
   return message;
 }
 
@@ -129,7 +137,7 @@ export class Inbox {
     if (!message) return null;
     if (isNewer(message) || message.k !== PART) return message;
     const { id, n, i, data: chunk } = message;
-    if (typeof id !== "string" || typeof chunk !== "string") return null;
+    if (!isId(id) || typeof chunk !== "string") return null;
     if (!Number.isInteger(n) || n < 1 || n > this.maxParts || !Number.isInteger(i) || i < 0 || i >= n) return null;
     const key = `${message.who}\u0000${message.doc}\u0000${id}`;
     let entry = this.pending.get(key);
