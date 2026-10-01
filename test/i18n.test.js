@@ -61,6 +61,12 @@ describe("the check of a catalogue", () => {
     expect(problemsOf(tiny())).toEqual([]);
   });
 
+  it("lets a translation use a hole once where English uses it twice", () => {
+    const catalogue = tiny();
+    catalogue.en.hello = "{name}, hi {name}";
+    expect(problemsOf(catalogue)).toEqual([]);
+  });
+
   it("finds a missing language, a missing or extra key, an empty text and a lost hole", () => {
     const catalogue = tiny();
     delete catalogue.th;

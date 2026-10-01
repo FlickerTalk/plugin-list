@@ -36,7 +36,7 @@ export function makeT(catalogue) {
   };
 }
 
-const holesOf = (text) => [...String(text).matchAll(HOLE)].map((match) => match[1]).sort().join(",");
+const holesOf = (text) => [...new Set([...String(text).matchAll(HOLE)].map((match) => match[1]))].sort().join(",");
 
 /** What is wrong with a catalogue: every language, every key of English, no empty text, same holes. */
 export function problemsOf(catalogue) {
