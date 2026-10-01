@@ -321,6 +321,23 @@ describe("two phones", () => {
     expect(statusOf(b)).toContain("Live");
   });
 
+  it("take a hello that arrives twice in a row as one, in order", async () => {
+    const { coreB, a, b, link, idle } = await twoPhones();
+    await fill(a, "new", "Compra");
+    await fill(a, "add", "leche");
+    coreB.shut();
+    await press(a, "live");
+    const hello = link.carried.at(-1).data;
+    coreB.listening = true;
+    await Promise.all([coreB.hear(hello), coreB.hear(hello)]);
+    await idle();
+    expect(rows(b)).toEqual(["☐ leche"]);
+    expect(statusOf(b)).toContain("Live");
+    expect(statusOf(a)).toContain("Live");
+    expect(link.carried.filter(({ data }) => decode(data, "ftlist").k === "bye")).toHaveLength(0);
+    expect(inside(b).querySelector("[data-invite]").textContent).toBe("");
+  });
+
   it("ignore a resumed hello for a list this phone never had", async () => {
     const coreB = fakeCore();
     const b = await phone(coreB);

@@ -7,7 +7,7 @@
 
 import { name as APP_NAME, version as APP_VERSION } from "../module.json";
 import { dirOf, makeT } from "./i18n.js";
-import { HELLO, Inbox, LiveSession, isNewer } from "./live.js";
+import { HELLO, Inbox, LiveSession, inOrder, isNewer } from "./live.js";
 import { yjsReplica } from "./live-yjs.js";
 import { List, MAX_NAME, MAX_TEXT } from "./model.js";
 import { Keeper } from "./store.js";
@@ -96,7 +96,8 @@ class ListElement extends HTMLElement {
     this.root.addEventListener("submit", (event) => this.onSubmit(event));
     this.root.addEventListener("keydown", (event) => this.onKey(event));
     this.ft.onOpen((opening) => this.onOpen(opening));
-    this.ft.live?.onMessage?.((data) => this.onLive(data));
+    // The frame does not wait for one message to be handled before handing the next.
+    this.ft.live?.onMessage?.(inOrder((data) => this.onLive(data)));
     this.paint();
   }
 
