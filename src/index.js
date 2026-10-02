@@ -9,7 +9,7 @@ import { name as APP_NAME, version as APP_VERSION } from "../module.json";
 import { dirOf, makeT } from "./i18n.js";
 import { HELLO, Inbox, LiveSession, inOrder, isNewer } from "./live.js";
 import { yjsReplica } from "./live-yjs.js";
-import { List, MAX_NAME, MAX_TEXT } from "./model.js";
+import { LOCAL_PLACE, List, MAX_NAME, MAX_TEXT, placeOf } from "./model.js";
 import { Keeper } from "./store.js";
 import { STRINGS } from "./strings.js";
 
@@ -83,12 +83,12 @@ class ListElement extends HTMLElement {
     this.confirming = null;
     this.invite = null;
     this.pendingTitle = "";
+    this.place = LOCAL_PLACE;
+    this.keeper = null;
   }
 
   connectedCallback() {
     this.ft = globalThis.ft;
-    this.keeper = new Keeper(this.ft.records);
-    this.keeper.onFull(() => this.paintWarning());
     this.inbox = new Inbox(FORMAT);
     this.root.innerHTML = `<style>${STYLE}</style><div class="view"></div>`;
     this.view = this.root.querySelector(".view");
@@ -117,7 +117,13 @@ class ListElement extends HTMLElement {
 
   async onOpen(opening) {
     this.lang = opening.lang || "en";
-    this.mayLive = Boolean(opening.live);
+    // The lists of a conversation live under its id (`chat`, core 1.3.0), which never leaves this
+    // phone; without one (opened from Settings, or malformed) they are this phone's own, never
+    // live, even if the core said `live`.
+    this.place = placeOf(opening.chat);
+    this.keeper = new Keeper(this.ft.records, this.place);
+    this.keeper.onFull(() => this.paintWarning());
+    this.mayLive = Boolean(opening.live) && this.place !== LOCAL_PLACE;
     this.setAttribute("lang", this.lang);
     this.setAttribute("dir", dirOf(this.lang));
     this.metas = await this.keeper.index();
@@ -157,7 +163,7 @@ class ListElement extends HTMLElement {
     }
     this.status = "off";
     for (const stop of this.stops.splice(0)) stop();
-    await this.keeper.settled();
+    await this.keeper?.settled();
     this.list = null;
     this.editing = null;
     this.renaming = false;
@@ -214,8 +220,13 @@ class ListElement extends HTMLElement {
     await this.startLive({ resume: false });
   }
 
-  /** What the twin says: for the live list, or a hello for one that is not live here. */
+  /**
+   * What the twin says: for the live list, or a hello for one that is not live here. Only lists of
+   * this conversation exist here: a resumed hello for a list kept under another conversation is
+   * unknown, and is not answered.
+   */
   async onLive(data) {
+    if (!this.mayLive || !this.keeper) return;
     const message = this.inbox.take(data);
     if (!message) return;
     if (this.session && message.doc === this.session.doc) {
@@ -229,7 +240,7 @@ class ListElement extends HTMLElement {
       }
       return;
     }
-    if (message.k !== HELLO || !this.mayLive || typeof message.sv !== "string") return;
+    if (message.k !== HELLO || typeof message.sv !== "string") return;
     const here = this.list && this.list.id === message.doc ? this.list : null;
     const known = here ?? (await this.keeper.load(message.doc));
     // A resumed hello only reopens what this phone shared with that same person.
@@ -401,6 +412,7 @@ class ListElement extends HTMLElement {
     return `
       <div class="bar"><h1 class="grow">${escape(T("title"))}</h1>${button("close", T("close"), "close-outline")}</div>
       <form data-form="new"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" placeholder="${escape(T("namePlaceholder"))}" aria-label="${escape(T("newList"))}"><button type="submit" aria-label="${escape(T("newList"))}">${icon("add-outline")}</button></form>
+      ${this.place === LOCAL_PLACE ? `<p class="hint" data-hint>${escape(T("localHint"))}</p>` : ""}
       ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}`;
   }
 

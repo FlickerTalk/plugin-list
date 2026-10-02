@@ -6,8 +6,13 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FORMAT } from "./src/index.js";
 import { HELLO, UPDATE, VERSION, decode, encode } from "./src/live.js";
-import { List, bodyKey, metaKey } from "./src/model.js";
+import { LOCAL_PLACE, List, bodyKey, metaKey } from "./src/model.js";
 import { connect, fakeCore } from "./test/fake-core.js";
+
+/** What the core calls a conversation for this plugin on each phone: opaque, 43 characters. */
+const CHAT_A = "a".repeat(42) + "1";
+const CHAT_B = "b".repeat(42) + "2";
+const CHAT_C = "c".repeat(42) + "3";
 
 const manifest = JSON.parse(readFileSync(join(import.meta.dirname, "module.json"), "utf8"));
 
@@ -16,7 +21,7 @@ const flush = async () => {
 };
 
 /** One phone with the plugin open: `live` when opened from a conversation with it granted. */
-async function phone(core, opening = { live: true }) {
+async function phone(core, opening = { live: true, chat: CHAT_A }) {
   globalThis.ft = core.ft;
   const element = document.createElement("ft-list");
   document.body.append(element);
@@ -54,12 +59,12 @@ afterEach(() => {
 });
 
 describe("the manifest and the catalogue", () => {
-  it("asks for live and to propose a text, nothing more, on core 1.1.0", () => {
+  it("asks for live and to propose a text, nothing more, on core 1.3.0 (the one that says the chat)", () => {
     expect(manifest).toEqual({
       id: "com.flickertalk.list",
       name: "List",
       version: "1.0.0",
-      minCoreVersion: "1.1.0",
+      minCoreVersion: "1.3.0",
       components: ["ft-list"],
       permissions: { live: true, send: "propose" },
       summary: expect.any(String),
@@ -81,11 +86,11 @@ describe("one phone", () => {
     await fill(element, "add", "   ");
     expect(rows(element)).toEqual(["☐ leche", "☐ pan"]);
     const id = element.list.id;
-    expect(List.parse(id, core.records.get(bodyKey(id))).entries().map((one) => one.text)).toEqual(["leche", "pan"]);
+    expect(List.parse(id, core.records.get(bodyKey(LOCAL_PLACE, id))).entries().map((one) => one.text)).toEqual(["leche", "pan"]);
 
     await press(element, "toggle", `[data-id="${itemId(element, "leche")}"]`);
     expect(rows(element)).toEqual(["☐ pan", "☑ leche"]);
-    expect(List.parse(id, core.records.get(bodyKey(id))).counts()).toEqual({ total: 2, done: 1 });
+    expect(List.parse(id, core.records.get(bodyKey(LOCAL_PLACE, id))).counts()).toEqual({ total: 2, done: 1 });
 
     await press(element, "edit", `[data-id="${itemId(element, "pan")}"]`);
     await fill(element, "edit", "pan integral");
@@ -93,7 +98,7 @@ describe("one phone", () => {
     await press(element, "edit", `[data-id="${itemId(element, "leche")}"]`);
     await press(element, "remove");
     expect(rows(element)).toEqual(["☐ pan integral"]);
-    expect(List.parse(id, core.records.get(bodyKey(id))).entries().map((one) => one.text)).toEqual(["pan integral"]);
+    expect(List.parse(id, core.records.get(bodyKey(LOCAL_PLACE, id))).entries().map((one) => one.text)).toEqual(["pan integral"]);
 
     await press(element, "rename");
     await fill(element, "rename", "Súper");
@@ -105,7 +110,7 @@ describe("one phone", () => {
     const names = [...inside(element).querySelectorAll("[data-act=open]")].map((one) => one.textContent);
     expect(names.join(" ")).toContain("Súper");
     expect(names.join(" ")).toContain("Tareas");
-    expect(JSON.parse(core.records.get(metaKey(id)))).toMatchObject({ name: "Súper", total: 1, done: 0 });
+    expect(JSON.parse(core.records.get(metaKey(LOCAL_PLACE, id)))).toMatchObject({ name: "Súper", total: 1, done: 0 });
   });
 
   it("asks inside the plugin before deleting a list, never with confirm()", async () => {
@@ -162,7 +167,7 @@ describe("one phone", () => {
     await fill(element, "new", "Compra");
     expect(inside(element).querySelector('[data-act="live"]')).toBeNull();
     expect(inside(element).textContent).toContain("To edit together, open List from a conversation");
-    const inChat = await phone(fakeCore(), { live: true });
+    const inChat = await phone(fakeCore(), { live: true, chat: CHAT_A });
     await fill(inChat, "new", "Compra");
     expect(inside(inChat).querySelector('[data-act="live"]')).not.toBeNull();
     expect(inside(inChat).textContent).toContain("only while you both have this list open in this conversation");
@@ -184,8 +189,8 @@ async function twoPhones() {
   const coreA = fakeCore();
   const coreB = fakeCore();
   const link = connect(coreA, coreB);
-  const a = await phone(coreA);
-  const b = await phone(coreB);
+  const a = await phone(coreA, { live: true, chat: CHAT_A });
+  const b = await phone(coreB, { live: true, chat: CHAT_B });
   const idle = async () => {
     await link.idle();
     await settle(a, b);
@@ -213,9 +218,9 @@ describe("two phones", () => {
     expect(rows(a)).toEqual(["☐ pan", "☐ huevos", "☑ leche"]);
     expect(rows(b)).toEqual(rows(a));
     // Each phone keeps its copy.
-    const kept = List.parse(b.list.id, coreB.records.get(bodyKey(b.list.id)));
+    const kept = List.parse(b.list.id, coreB.records.get(bodyKey(CHAT_B, b.list.id)));
     expect(kept.entries().map((one) => one.text)).toEqual(["pan", "huevos", "leche"]);
-    expect(JSON.parse(coreB.records.get(metaKey(b.list.id)))).toMatchObject({ shared: true });
+    expect(JSON.parse(coreB.records.get(metaKey(CHAT_B, b.list.id)))).toMatchObject({ shared: true });
   });
 
   it("keep a tick on one and an edit on the other of the same item", async () => {
@@ -297,7 +302,7 @@ describe("two phones", () => {
     // B opens List again in the conversation and enters the list: it says hello on its own.
     document.body.removeChild(b);
     coreB.reload();
-    const again = await phone(coreB);
+    const again = await phone(coreB, { live: true, chat: CHAT_B });
     await press(again, "open", `[data-id="${id}"]`);
     await idle();
     expect(rows(again)).toEqual(["☐ while b was away"]);
@@ -391,5 +396,146 @@ describe("two phones", () => {
     expect(b.list.counts().total).toBe(200);
     for (const { data } of link.carried) expect(atob(data).length).toBeLessThanOrEqual(48 * 1024);
     expect(link.carried.some(({ data }) => decode(data, "ftlist").k === "part")).toBe(true);
+  });
+});
+
+/** Every string inside what travelled, base64 unpacked as deep as it goes, as text. */
+function unpacked(data, depth = 0) {
+  const found = [String(data)];
+  if (depth > 4 || typeof data !== "string") return found;
+  let text;
+  try {
+    text = atob(data);
+  } catch {
+    return found;
+  }
+  found.push(text);
+  try {
+    const message = JSON.parse(new TextDecoder().decode(Uint8Array.from(text, (char) => char.charCodeAt(0))));
+    for (const value of Object.values(message)) if (typeof value === "string") found.push(...unpacked(value, depth + 1));
+  } catch {
+    // Bytes, not JSON (a Yjs update): the text above is all there is.
+  }
+  return found;
+}
+
+describe("the conversation the plugin is opened in", () => {
+  it("keeps the lists of each conversation apart, and apart from the phone's own", async () => {
+    const core = fakeCore();
+    const inB = await phone(core, { live: true, chat: CHAT_B });
+    await fill(inB, "new", "With B");
+    await fill(inB, "add", "for B only");
+    const id = inB.list.id;
+    expect([...core.records.keys()].sort()).toEqual([`list/${CHAT_B}/${id}/body`, `list/${CHAT_B}/${id}/meta`]);
+
+    document.body.innerHTML = "";
+    core.reload();
+    const inC = await phone(core, { live: true, chat: CHAT_C });
+    expect(inside(inC).textContent).toContain("No lists yet");
+    await fill(inC, "new", "With C");
+    await press(inC, "back");
+    expect(inside(inC).textContent).not.toContain("With B");
+
+    document.body.innerHTML = "";
+    core.reload();
+    const alone = await phone(core, { live: false });
+    expect(inside(alone).textContent).toContain("No lists yet");
+    expect(inside(alone).textContent).toContain("Lists made here stay on this phone");
+
+    document.body.innerHTML = "";
+    core.reload();
+    const backInB = await phone(core, { live: true, chat: CHAT_B });
+    const names = [...inside(backInB).querySelectorAll("[data-act=open]")].map((one) => one.textContent).join(" ");
+    expect(names).toContain("With B");
+    expect(names).not.toContain("With C");
+    expect(inside(backInB).textContent).not.toContain("Lists made here stay on this phone");
+  });
+
+  it("answers nothing when someone else presents a shared list with its owner's id (the attack)", async () => {
+    // A shared X with C; X lives on C's phone under C's chat with A.
+    const coreA = fakeCore();
+    const coreC = fakeCore();
+    const link = connect(coreA, coreC);
+    const a = await phone(coreA, { live: true, chat: CHAT_A });
+    let c = await phone(coreC, { live: true, chat: CHAT_C });
+    await fill(a, "new", "Secret");
+    await fill(a, "add", "the code is 1234");
+    await press(a, "live");
+    await link.idle();
+    await settle(a, c);
+    const x = a.list.id;
+    const whoA = a.list.who;
+    expect(rows(c)).toEqual(["☐ the code is 1234"]);
+    await press(a, "close");
+    await press(c, "close");
+
+    // C now has List open in the conversation with B. B, with a modified app, says A's resumed hello.
+    document.body.innerHTML = "";
+    coreC.reload();
+    c = await phone(coreC, { live: true, chat: CHAT_B });
+    const sentBefore = coreC.sent.length;
+    const writesBefore = coreC.ft.records.set.mock.calls.length;
+    await coreC.hear(encode({ p: "ftlist", v: VERSION, k: HELLO, doc: x, who: whoA, app: "1.0.0", sv: "AA==", resume: true }));
+    await settle(c);
+    expect(coreC.sent.length).toBe(sentBefore);
+    expect(c.list).toBeNull();
+    expect(coreC.ft.records.set.mock.calls.length).toBe(writesBefore);
+
+    // An open hello for X there makes a new, empty list in that conversation, with nothing of C's.
+    await coreC.hear(encode({ p: "ftlist", v: VERSION, k: HELLO, doc: x, who: whoA, app: "1.0.0", sv: "AA==", title: "Secret" }));
+    await settle(c);
+    expect(c.list.id).toBe(x);
+    expect(c.list.entries()).toEqual([]);
+    const said = coreC.sent.slice(sentBefore).flatMap((data) => unpacked(data)).join("\n");
+    expect(said).not.toContain("the code is 1234");
+    expect(coreC.records.get(bodyKey(CHAT_B, x)) ?? "").not.toContain(btoa("the code is 1234").slice(0, 8));
+    // C's own copy, in the conversation with A, is untouched.
+    const own = List.parse(x, coreC.records.get(bodyKey(CHAT_C, x)), coreC.records.get(metaKey(CHAT_C, x)));
+    expect(own.entries().map((one) => one.text)).toEqual(["the code is 1234"]);
+  });
+
+  it("treats a malformed chat as no conversation: local lists, no live", async () => {
+    for (const chat of ["short", `${CHAT_A}x`, `${CHAT_A.slice(1)}/`, 7]) {
+      document.body.innerHTML = "";
+      const core = fakeCore();
+      const element = await phone(core, { live: true, chat });
+      await fill(element, "new", "Here");
+      expect([...core.records.keys()].every((key) => key.startsWith("list/local/"))).toBe(true);
+      expect(inside(element).querySelector('[data-act="live"]')).toBeNull();
+    }
+  });
+
+  it("never goes live without a conversation, even if the core says live, and ignores what arrives", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: true });
+    await fill(element, "new", "Mine");
+    expect(inside(element).querySelector('[data-act="live"]')).toBeNull();
+    expect(inside(element).textContent).toContain("To edit together, open List from a conversation");
+    await press(element, "back");
+    await core.hear(encode({ p: "ftlist", v: VERSION, k: HELLO, doc: "someone", who: "w", app: "1.0.0", sv: "AA==", title: "Theirs" }));
+    await settle(element);
+    expect(element.list).toBeNull();
+    expect(core.sent).toHaveLength(0);
+    expect(inside(element).textContent).not.toContain("Theirs");
+  });
+
+  it("never lets the chat id leave the phone: not live, not in the composer", async () => {
+    const { coreA, coreB, a, b, link, idle } = await twoPhones();
+    await fill(a, "new", "Compra");
+    await fill(a, "add", "leche");
+    await press(a, "live");
+    await idle();
+    await press(b, "toggle", `[data-id="${itemId(b, "leche")}"]`);
+    await fill(b, "add", "pan");
+    await idle();
+    for (let at = 0; at < 120; at += 1) a.list.add(`${"long item ".repeat(40)}${at}`);
+    await press(a, "live");
+    await press(a, "live");
+    await idle();
+    await press(b, "send");
+    expect(link.carried.some(({ data }) => decode(data, "ftlist").k === "part")).toBe(true);
+    const everything = [...coreA.sent, ...coreB.sent].flatMap((data) => unpacked(data)).concat(coreA.said, coreB.said).join("\n");
+    expect(coreB.said).toHaveLength(1);
+    for (const chat of [CHAT_A, CHAT_B]) expect(everything).not.toContain(chat);
   });
 });

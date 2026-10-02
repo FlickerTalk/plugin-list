@@ -61,7 +61,7 @@ describe("the package", () => {
     for (let at = 0; at < 50; at += 1) await Promise.resolve();
     await element.keeper.settled();
     expect(element.shadowRoot.querySelector("[data-name]").textContent).toBe("Compra");
-    expect([...core.records.keys()].sort()).toEqual([`list/${element.list.id}/body`, `list/${element.list.id}/meta`]);
+    expect([...core.records.keys()].sort()).toEqual([`list/local/${element.list.id}/body`, `list/local/${element.list.id}/meta`]);
   });
 
   it("carries the licence of everything inside the bundle", () => {

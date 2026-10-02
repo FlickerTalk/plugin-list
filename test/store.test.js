@@ -6,19 +6,21 @@ import { List, bodyKey, metaKey } from "../src/model.js";
 import { Keeper } from "../src/store.js";
 import { fakeCore } from "./fake-core.js";
 
-const kept = (core, id) => List.parse(id, core.records.get(bodyKey(id)), core.records.get(metaKey(id)));
+const PLACE = "P".repeat(43);
+const OTHER = "Q".repeat(43);
+const kept = (core, id, place = PLACE) => List.parse(id, core.records.get(bodyKey(place, id)), core.records.get(metaKey(place, id)));
 const texts = (list) => list.entries().map((one) => one.text);
 
 describe("the keeper", () => {
   it("saves a list on every change, body and meta", async () => {
     const core = fakeCore();
-    const keeper = new Keeper(core.ft.records);
+    const keeper = new Keeper(core.ft.records, PLACE);
     const list = new List({ name: "Compra" });
     keeper.watch(list);
     list.add("leche");
     await keeper.settled();
     expect(texts(kept(core, list.id))).toEqual(["leche"]);
-    expect(JSON.parse(core.records.get(metaKey(list.id)))).toMatchObject({ name: "Compra", total: 1 });
+    expect(JSON.parse(core.records.get(metaKey(PLACE, list.id)))).toMatchObject({ name: "Compra", total: 1 });
     list.add("pan");
     await keeper.settled();
     expect(texts(kept(core, list.id))).toEqual(["leche", "pan"]);
@@ -31,7 +33,7 @@ describe("the keeper", () => {
 
   it("saves what came from the twin too, and stops when told to", async () => {
     const core = fakeCore();
-    const keeper = new Keeper(core.ft.records);
+    const keeper = new Keeper(core.ft.records, PLACE);
     const list = new List({ name: "x" });
     const stop = keeper.watch(list);
     const other = List.parse(list.id, list.body());
@@ -49,7 +51,7 @@ describe("the keeper", () => {
 
   it("says when the quota is full, keeps the list on screen, and recovers when there is room", async () => {
     const core = fakeCore({ quota: 600 });
-    const keeper = new Keeper(core.ft.records);
+    const keeper = new Keeper(core.ft.records, PLACE);
     const states = [];
     keeper.onFull((full) => states.push(full));
     const list = new List({ name: "Compra" });
@@ -77,22 +79,22 @@ describe("the keeper", () => {
     core.ft.records.set = async () => {
       throw new Error("gone");
     };
-    const keeper = new Keeper(core.ft.records);
+    const keeper = new Keeper(core.ft.records, PLACE);
     expect(await keeper.save(new List({ name: "x" }))).toBe(false);
     expect(keeper.full).toBe(true);
   });
 
   it("lists what is kept, newest first, even when a meta is broken or missing", async () => {
     const core = fakeCore();
-    const keeper = new Keeper(core.ft.records);
+    const keeper = new Keeper(core.ft.records, PLACE);
     const old = new List({ id: "a", name: "Old", updatedAt: 1 });
     const recent = new List({ id: "b", name: "Recent" });
     await keeper.save(old);
     await keeper.save(recent);
     const orphan = new List({ id: "c", name: "Orphan" });
     orphan.add("x");
-    core.records.set(bodyKey("c"), orphan.body());
-    core.records.set(metaKey("d"), "{broken");
+    core.records.set(bodyKey(PLACE, "c"), orphan.body());
+    core.records.set(metaKey(PLACE, "d"), "{broken");
     core.records.set("something/else", "1");
     const index = await keeper.index();
     expect(index.map((one) => one.id)).toEqual(["c", "b", "a"]);
@@ -100,7 +102,29 @@ describe("the keeper", () => {
     expect((await keeper.load("b")).name).toBe("Recent");
     expect(await keeper.load("nothing")).toBeNull();
     await keeper.forget("b");
-    expect(core.records.has(bodyKey("b"))).toBe(false);
-    expect(core.records.has(metaKey("b"))).toBe(false);
+    expect(core.records.has(bodyKey(PLACE, "b"))).toBe(false);
+    expect(core.records.has(metaKey(PLACE, "b"))).toBe(false);
+  });
+
+  it("lists, loads, saves and forgets only inside its own place", async () => {
+    const core = fakeCore();
+    const here = new Keeper(core.ft.records, PLACE);
+    const there = new Keeper(core.ft.records, OTHER);
+    const local = new Keeper(core.ft.records, "local");
+    const mine = new List({ id: "same", name: "Here" });
+    mine.add("secret");
+    await here.save(mine);
+    const theirs = new List({ id: "same", name: "There" });
+    await there.save(theirs);
+    await local.save(new List({ id: "solo", name: "Solo" }));
+    expect((await here.index()).map((one) => one.name)).toEqual(["Here"]);
+    expect((await there.index()).map((one) => one.name)).toEqual(["There"]);
+    expect((await local.index()).map((one) => one.name)).toEqual(["Solo"]);
+    expect((await there.load("same")).entries()).toEqual([]);
+    expect(await there.load("solo")).toBeNull();
+    expect(await local.load("same")).toBeNull();
+    await there.forget("same");
+    expect(texts(kept(core, "same"))).toEqual(["secret"]);
+    expect([...core.records.keys()].sort()).toEqual([`list/${PLACE}/same/body`, `list/${PLACE}/same/meta`, "list/local/solo/body", "list/local/solo/meta"]);
   });
 });

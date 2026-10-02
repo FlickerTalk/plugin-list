@@ -6,10 +6,20 @@
 import * as Y from "yjs";
 import { fromBase64, newWho, toBase64 } from "./live.js";
 
-/** Where the plugin keeps its lists, one meta record and one body record each. */
+/**
+ * Where the plugin keeps its lists: one meta record and one body record each, under the place they
+ * belong to. A place is the conversation the plugin was opened in (`onOpen.chat`, core 1.3.0: an
+ * opaque id of 43 `[A-Za-z0-9_-]`, this phone's own, never sent), or `local` when there is none
+ * or it is malformed. A list is seen, opened and shared only from its own place, so a list shared
+ * with one person is never offered, nor said hello to, in the conversation with another.
+ * Longest key: 5 + 43 + 1 + 64 + 5 = 118 bytes, under the core's 128.
+ */
 export const PREFIX = "list/";
-export const metaKey = (id) => `${PREFIX}${id}/meta`;
-export const bodyKey = (id) => `${PREFIX}${id}/body`;
+export const LOCAL_PLACE = "local";
+const CHAT = /^[A-Za-z0-9_-]{43}$/;
+export const placeOf = (chat) => (typeof chat === "string" && CHAT.test(chat) ? chat : LOCAL_PLACE);
+export const metaKey = (place, id) => `${PREFIX}${place}/${id}/meta`;
+export const bodyKey = (place, id) => `${PREFIX}${place}/${id}/body`;
 
 /** The shape of the document. A list with a higher schema came from a newer plugin: read only. */
 export const SCHEMA = 1;

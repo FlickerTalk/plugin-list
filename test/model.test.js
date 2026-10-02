@@ -3,7 +3,8 @@
 // fractional order; the text that 📤 proposes; and the records it is kept in.
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { List, MAX_NAME, MAX_TEXT, PREFIX, SCHEMA, bodyKey, metaKey, newId, orderBetween } from "../src/model.js";
+import { List, LOCAL_PLACE, MAX_NAME, MAX_TEXT, PREFIX, SCHEMA, bodyKey, metaKey, newId, orderBetween, placeOf } from "../src/model.js";
+import { ID } from "../src/live.js";
 
 /** Two phones' copies of one list, exchanging everything both ways. */
 const exchange = (a, b) => {
@@ -134,12 +135,30 @@ describe("a list from a newer version", () => {
   });
 });
 
+describe("where a list is kept", () => {
+  it("is the conversation it was opened in, or this phone only when there is none or it is malformed", () => {
+    const chat = "aZ09_-".repeat(7) + "x";
+    expect(chat).toHaveLength(43);
+    expect(placeOf(chat)).toBe(chat);
+    expect(LOCAL_PLACE).toBe("local");
+    for (const bad of [undefined, null, "", "local", chat.slice(1), `${chat}y`, `${chat.slice(1)}/`, `${chat.slice(1)} `, `${chat.slice(1)}.`, 42]) expect(placeOf(bad), String(bad)).toBe(LOCAL_PLACE);
+  });
+
+  it("fits the core's 128-byte keys even with the longest place and the longest id", () => {
+    const place = "p".repeat(43);
+    const id = "i".repeat(64);
+    expect(ID.test(id)).toBe(true);
+    for (const key of [metaKey(place, id), bodyKey(place, id)]) expect(new TextEncoder().encode(key).length).toBeLessThanOrEqual(128);
+  });
+});
+
 describe("the records of a list", () => {
   it("are a meta with what the list of lists shows and a body with the Yjs snapshot", () => {
     const list = new List({ id: "abc", name: "Compra", who: "me", peer: "you", shared: true });
     list.add("leche");
-    expect(metaKey("abc")).toBe(`${PREFIX}abc/meta`);
-    expect(bodyKey("abc")).toBe(`${PREFIX}abc/body`);
+    const chat = "C".repeat(43);
+    expect(metaKey(chat, "abc")).toBe(`${PREFIX}${chat}/abc/meta`);
+    expect(bodyKey(LOCAL_PLACE, "abc")).toBe(`${PREFIX}local/abc/body`);
     const meta = JSON.parse(list.meta());
     expect(meta).toMatchObject({ id: "abc", name: "Compra", total: 1, done: 0, who: "me", peer: "you", shared: true });
     expect(typeof meta.updatedAt).toBe("number");

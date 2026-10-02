@@ -6,11 +6,15 @@
 
 import { List, PREFIX, bodyKey, metaKey } from "./model.js";
 
-const KEY = /^list\/([^/]+)\/(meta|body)$/;
-
+/**
+ * The lists of one place (a conversation, or `local`): it lists, loads, saves and forgets only
+ * inside it. A list of another place does not exist for it, even with the same id.
+ */
 export class Keeper {
-  constructor(records) {
+  constructor(records, place) {
     this.records = records;
+    this.place = place;
+    this.prefix = `${PREFIX}${place}/`;
     this.full = false;
     this.listeners = new Set();
     this.dirty = new Map();
@@ -56,7 +60,7 @@ export class Keeper {
   async write(list) {
     let ok = false;
     try {
-      ok = (await this.records.set(bodyKey(list.id), list.body())) === true && (await this.records.set(metaKey(list.id), list.meta())) === true;
+      ok = (await this.records.set(bodyKey(this.place, list.id), list.body())) === true && (await this.records.set(metaKey(this.place, list.id), list.meta())) === true;
     } catch {
       ok = false;
     }
@@ -71,13 +75,14 @@ export class Keeper {
   async index() {
     let keys = [];
     try {
-      keys = (await this.records.keys(PREFIX)) || [];
+      keys = (await this.records.keys(this.prefix)) || [];
     } catch {
       keys = [];
     }
     const ids = new Set();
     for (const key of keys) {
-      const match = KEY.exec(key);
+      if (typeof key !== "string" || !key.startsWith(this.prefix)) continue;
+      const match = /^([^/]+)\/(meta|body)$/.exec(key.slice(this.prefix.length));
       if (match) ids.add(match[1]);
     }
     const metas = [];
@@ -90,7 +95,7 @@ export class Keeper {
 
   async readMeta(id) {
     try {
-      const meta = JSON.parse(await this.records.get(metaKey(id)));
+      const meta = JSON.parse(await this.records.get(metaKey(this.place, id)));
       if (meta && typeof meta === "object" && meta.id === id && typeof meta.name === "string") return meta;
     } catch {
       // A broken meta: the body still says what the list is.
@@ -102,8 +107,8 @@ export class Keeper {
   /** A kept list, or null. */
   async load(id) {
     try {
-      const body = await this.records.get(bodyKey(id));
-      const meta = await this.records.get(metaKey(id));
+      const body = await this.records.get(bodyKey(this.place, id));
+      const meta = await this.records.get(metaKey(this.place, id));
       return List.parse(id, body, meta);
     } catch {
       return null;
@@ -113,7 +118,7 @@ export class Keeper {
   async forget(id) {
     this.dirty.delete(id);
     await this.settled();
-    await this.records.forget(bodyKey(id));
-    await this.records.forget(metaKey(id));
+    await this.records.forget(bodyKey(this.place, id));
+    await this.records.forget(metaKey(this.place, id));
   }
 }
