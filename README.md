@@ -10,19 +10,19 @@ which the two people of a conversation can edit at the same time.
 - **Lists belong to a conversation.** Opened from a conversation, List shows and opens only the
   lists of that conversation. Opened outside one (from Settings), it shows this phone's own lists,
   which never go live.
-- **🔄 Live**, from a conversation: the same list on both phones, each change on the other phone as
+- **Live** (sync icon), from a conversation: the same list on both phones, each change on the other phone as
   it happens. The other phone opens the list by itself if List is open there; if it is on another
-  list, it is offered "📥 The other person opened “Shopping” — Join".
+  list, it is offered "The other person opened “Shopping” — Join".
 - **The limit, said in the plugin**: changes join only while **both** have the list open in that
   conversation. If the other phone does not answer within about 8 seconds, List says
-  "👤 The other person doesn't have List open in this conversation. They may not have it, may not
+  "The other person doesn't have List open in this conversation. They may not have it, may not
   have allowed it, or may have it closed." It cannot tell those apart, and it never claims that a
   change arrived when it did not.
 - **Apart, then together**: what each one does with no connection, or with the list closed, is kept
   on each phone and joins the other's the next time both have the list open (a tick on one phone
   and an edit of the same item on the other keep both). Entering a list that was shared says hello
   on its own; nothing is said just by opening List, because a hello may wake the other phone.
-- **📤** (only from a conversation) puts the list in its composer as text, for you to send:
+- **Send** (send icon, only from a conversation) puts the list in its composer as text, for you to send:
 
   ```text
   🛒 Shopping
@@ -31,6 +31,9 @@ which the two people of a conversation can edit at the same time.
   ```
 
 - **21 languages**, right to left in Arabic, dark mode (when the app says so, or the system is dark).
+- **Icons are Ionicons** (outline), as in the app: those the app lends are drawn from it, the few
+  it does not lend travel in the bundle. No emoji in the interface; the only ones are in the text
+  that the send button puts in the composer.
 
 Not in this version: reordering by dragging (so SortableJS is not used), quantities, categories,
 reminders, templates, more than two people, assigning items.
@@ -44,12 +47,12 @@ connection, never stored on our server.
   the phone, and it has no network.
 - From the core it gets an opaque id of the conversation (`chat`), only to keep each
   conversation's lists apart. The id is this phone's own: it never leaves the phone, not live
-  and not in what 📤 writes.
+  and not in what Send writes.
 - Live messages go through the core's `ft.live`: only over the direct connection between the two
   phones, end-to-end encrypted like every message, never through the mailbox. If the connection is
   relayed by our TURN server, the server sees that there is traffic, never its content.
 - Going live may wake the other phone with a push that carries no content.
-- What 📤 puts in the composer and you send is a message like any other.
+- What Send puts in the composer and you send is a message like any other.
 
 ## What it uses of the core
 
@@ -57,7 +60,7 @@ connection, never stored on our server.
 | ------------ | ----------------------------------------------------------------------------- |
 | `ft.records` | each list in two records, `list/<place>/<id>/meta` and `list/<place>/<id>/body`, written on every change (`storage: small`, 4 MB) |
 | `ft.live`    | live editing, 1 to 1, in messages of at most 48 KiB (bigger ones go in parts) |
-| `ft.say`     | 📤 (`send: propose`: the text lands in the composer and you send it)          |
+| `ft.say`     | Send (`send: propose`: the text lands in the composer and you send it)          |
 | `onOpen`     | `lang`, `live` (true only from a conversation, with live allowed) and `chat` (the conversation's id, see below) |
 
 Permissions: `{ "live": true, "send": "propose" }`. Needs FlickerTalk core **1.3.0**
@@ -129,4 +132,5 @@ the licences of the dependencies.
 
 ## Licence
 
-MIT. The bundle contains Yjs and lib0 (MIT); their licences are in `THIRD_PARTY_NOTICES.md`.
+MIT. The bundle contains Yjs, lib0 and a few Ionicons SVGs (all MIT); their licences are in
+`THIRD_PARTY_NOTICES.md`.
