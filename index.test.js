@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FORMAT } from "./src/index.js";
 import { HELLO, UPDATE, VERSION, decode, encode } from "./src/live.js";
 import { LOCAL_PLACE, List, bodyKey, metaKey } from "./src/model.js";
+import { STRINGS } from "./src/strings.js";
 import { connect, fakeCore } from "./test/fake-core.js";
 
 /** What the core calls a conversation for this plugin on each phone: opaque, 43 characters. */
@@ -70,14 +71,29 @@ describe("the manifest and the catalogue", () => {
     expect(manifest).toEqual({
       id: "com.flickertalk.list",
       name: "List",
-      version: "1.0.0",
+      version: "1.0.1",
       minCoreVersion: "1.3.0",
       components: ["ft-list"],
       permissions: { live: true, send: "propose" },
       summary: expect.any(String),
+      locales: expect.any(Object),
     });
     expect(manifest.summary.length).toBeLessThanOrEqual(200);
     expect(FORMAT).toBe("ftlist");
+  });
+
+  it("names List in each of the app's languages with its own title, and sums it up within the schema's limits", () => {
+    const languages = ["es", "pt", "fr", "de", "it", "ro", "ru", "uk", "pl", "tr", "ar", "hi", "bn", "id", "vi", "th", "ja", "ko", "zh-CN", "zh-TW"];
+    const length = (text) => [...text].length; // the schema counts code points, not UTF-16 units
+    expect(Object.keys(manifest.locales ?? {})).toEqual(languages);
+    for (const lang of languages) {
+      const { name, summary, ...rest } = manifest.locales[lang];
+      expect(rest, lang).toEqual({});
+      expect(name, lang).toBe(STRINGS[lang].title);
+      expect(length(name), lang).toBeLessThanOrEqual(64);
+      expect(summary.trim(), lang).not.toBe("");
+      expect(length(summary), lang).toBeLessThanOrEqual(200);
+    }
   });
 });
 
