@@ -24,7 +24,7 @@ const escape = (text) =>
 const STYLE = `
 :host { display: block; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --done: #8a8a8a; }
 @media (prefers-color-scheme: dark) { :host { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --done: #888; } }
-:host-context([data-dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --done: #888; }
+:host([dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --done: #888; }
 * { box-sizing: border-box; }
 .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
 .grow { flex: 1; min-width: 0; }
@@ -126,6 +126,10 @@ class ListElement extends HTMLElement {
     this.mayLive = Boolean(opening.live) && this.place !== LOCAL_PLACE;
     this.setAttribute("lang", this.lang);
     this.setAttribute("dir", dirOf(this.lang));
+    // Dark when the app says so: `:host([dark])` works in WebKit too (`:host-context` does not).
+    // The system's dark mode stays as a fallback in the stylesheet.
+    if (opening.dark) this.setAttribute("dark", "");
+    else this.removeAttribute("dark");
     this.metas = await this.keeper.index();
     this.paint();
   }
@@ -373,7 +377,8 @@ class ListElement extends HTMLElement {
 
   /** 📤: the list as text in the composer. The app closes the plugin, so leave cleanly first. */
   async sendList() {
-    if (!this.list) return;
+    // Outside a conversation there is no composer: `say` would do nothing and the list would be gone.
+    if (!this.list || this.place === LOCAL_PLACE) return;
     const text = this.list.summary(this.T("untitled"));
     await this.leave();
     this.ft.say(text);
@@ -445,7 +450,7 @@ class ListElement extends HTMLElement {
       ${title}
       ${!this.renaming && !list.readOnly ? button("rename", T("rename"), "pencil-outline") : ""}
       ${this.mayLive && !list.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">🔄 ${escape(T("live"))}</button>` : ""}
-      ${button("send", T("send"), "send-outline")}
+      ${this.place !== LOCAL_PLACE ? button("send", T("send"), "send-outline") : ""}
       ${button("close", T("close"), "close-outline")}`;
   }
 

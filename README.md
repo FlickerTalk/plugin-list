@@ -22,7 +22,7 @@ which the two people of a conversation can edit at the same time.
   on each phone and joins the other's the next time both have the list open (a tick on one phone
   and an edit of the same item on the other keep both). Entering a list that was shared says hello
   on its own; nothing is said just by opening List, because a hello may wake the other phone.
-- **📤** puts the list in the conversation's composer as text, for you to send:
+- **📤** (only from a conversation) puts the list in its composer as text, for you to send:
 
   ```text
   🛒 Shopping
@@ -30,7 +30,7 @@ which the two people of a conversation can edit at the same time.
   ☑ bread
   ```
 
-- **21 languages**, right to left in Arabic, dark mode.
+- **21 languages**, right to left in Arabic, dark mode (when the app says so, or the system is dark).
 
 Not in this version: reordering by dragging (so SortableJS is not used), quantities, categories,
 reminders, templates, more than two people, assigning items.

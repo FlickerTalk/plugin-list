@@ -133,13 +133,39 @@ describe("one phone", () => {
 
   it("proposes the list as text in the chat, after keeping it", async () => {
     const core = fakeCore();
-    const element = await phone(core, { live: false });
+    const element = await phone(core, { live: false, chat: CHAT_A });
     await fill(element, "new", "Compra");
     await fill(element, "add", "leche");
     await fill(element, "add", "pan");
     await press(element, "toggle", `[data-id="${itemId(element, "pan")}"]`);
     await press(element, "send");
     expect(core.said).toEqual(["🛒 Compra\n☐ leche\n☑ pan"]);
+  });
+
+  it("offers no 📤 outside a conversation, and sending there does nothing and keeps the list usable", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false });
+    await fill(element, "new", "Compra");
+    await fill(element, "add", "leche");
+    expect(inside(element).querySelector('[data-act="send"]')).toBeNull();
+    await element.sendList();
+    await settle(element);
+    expect(core.ft.say).not.toHaveBeenCalled();
+    expect(element.list?.name).toBe("Compra");
+    await fill(element, "add", "pan");
+    expect(rows(element)).toEqual(["☐ leche", "☐ pan"]);
+  });
+
+  it("goes dark when the app says so, also where :host-context does not exist (WebKit)", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false, dark: true });
+    expect(element.hasAttribute("dark")).toBe(true);
+    await core.open({ live: false, dark: false });
+    expect(element.hasAttribute("dark")).toBe(false);
+    const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
+    expect(css).toContain(":host([dark])");
+    expect(css).toContain("prefers-color-scheme: dark");
+    expect(css).not.toContain(":host-context");
   });
 
   it("says when the phone has no room left, and keeps the list on screen", async () => {
