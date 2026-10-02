@@ -173,6 +173,21 @@ describe("one phone", () => {
     expect(css).not.toMatch(/\.check\s*\{[^}]*(width|height):\s*(?:[0-3]\d|4[0-3])px/);
   });
 
+  it("is born without attributes or children, as a custom element's constructor must be", async () => {
+    // A real browser throws NotSupportedError from createElement if the constructor sets one
+    // (`this.lang = …` reflects to the `lang` attribute).
+    const element = document.createElement("ft-list");
+    expect([...element.attributes].map((one) => one.name)).toEqual([]);
+    expect(element.childNodes).toHaveLength(0);
+    // The language and the direction are set when the app opens it.
+    const core = fakeCore({ lang: "ar" });
+    globalThis.ft = core.ft;
+    document.body.append(element);
+    await core.open({ live: false });
+    expect(element.getAttribute("lang")).toBe("ar");
+    expect(element.getAttribute("dir")).toBe("rtl");
+  });
+
   it("keeps its content to a comfortable width on a tablet", () => {
     const element = document.createElement("ft-list");
     document.body.append(element);

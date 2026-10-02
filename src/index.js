@@ -84,7 +84,8 @@ class ListElement extends HTMLElement {
   constructor() {
     super();
     this.root = this.attachShadow({ mode: "open" });
-    this.lang = "en";
+    // Not `this.lang`: it reflects to the `lang` attribute, and a constructor may set none.
+    this.language = "en";
     this.mayLive = false;
     this.screen = "home";
     this.metas = [];
@@ -115,12 +116,12 @@ class ListElement extends HTMLElement {
   }
 
   T(key, holes = {}) {
-    return t(this.lang, key, { app: APP_NAME, ...holes });
+    return t(this.language, key, { app: APP_NAME, ...holes });
   }
 
   number(value) {
     try {
-      return new Intl.NumberFormat(this.lang).format(value);
+      return new Intl.NumberFormat(this.language).format(value);
     } catch {
       return String(value);
     }
@@ -129,7 +130,7 @@ class ListElement extends HTMLElement {
   // ---- What the app hands over ----
 
   async onOpen(opening) {
-    this.lang = opening.lang || "en";
+    this.language = opening.lang || "en";
     // The lists of a conversation live under its id (`chat`, core 1.3.0), which never leaves this
     // phone; without one (opened from Settings, or malformed) they are this phone's own, never
     // live, even if the core said `live`.
@@ -137,8 +138,8 @@ class ListElement extends HTMLElement {
     this.keeper = new Keeper(this.ft.records, this.place);
     this.keeper.onFull(() => this.paintWarning());
     this.mayLive = Boolean(opening.live) && this.place !== LOCAL_PLACE;
-    this.setAttribute("lang", this.lang);
-    this.setAttribute("dir", dirOf(this.lang));
+    this.setAttribute("lang", this.language);
+    this.setAttribute("dir", dirOf(this.language));
     // Dark when the app says so: `:host([dark])` works in WebKit too (`:host-context` does not).
     // The system's dark mode stays as a fallback in the stylesheet.
     if (opening.dark) this.setAttribute("dark", "");
