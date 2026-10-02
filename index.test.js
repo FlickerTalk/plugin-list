@@ -148,6 +148,31 @@ describe("one phone", () => {
     expect(rows(element)).toEqual(["☐ 牛乳"]);
   });
 
+  it("puts a list's title on its own line, whole, and the buttons on the line below, at 44 px", async () => {
+    const element = await phone(fakeCore(), { live: true, chat: CHAT_A });
+    const long = "Compra de la semana para la casa del pueblo";
+    await fill(element, "new", long);
+    const header = inside(element).querySelector("[data-header]");
+    const titleRow = header.querySelector(":scope > [data-title-row]");
+    const actions = header.querySelector(":scope > [data-actions]");
+    expect(titleRow).not.toBeNull();
+    expect(actions).not.toBeNull();
+    expect(titleRow.querySelector("[data-name]").textContent).toBe(long);
+    expect(titleRow.querySelector("button")).toBeNull();
+    for (const act of ["back", "rename", "live", "send", "close"]) expect(actions.querySelector(`[data-act="${act}"]`), act).not.toBeNull();
+    // While renaming, the field takes the title's line, not the buttons'.
+    await press(element, "rename");
+    expect(inside(element).querySelector('[data-title-row] [data-field="rename"]')).not.toBeNull();
+    const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
+    expect(css).not.toContain("ellipsis");
+    expect(css).toMatch(/\.actions\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(css).toMatch(/button\s*\{[^}]*min-width:\s*44px[^}]*\}/);
+    expect(css).toMatch(/button\s*\{[^}]*min-height:\s*44px[^}]*\}/);
+    expect(css).toMatch(/h1\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    // The tick box too: a 44 px target around the drawn box.
+    expect(css).not.toMatch(/\.check\s*\{[^}]*(width|height):\s*(?:[0-3]\d|4[0-3])px/);
+  });
+
   it("keeps its content to a comfortable width on a tablet", () => {
     const element = document.createElement("ft-list");
     document.body.append(element);

@@ -29,10 +29,14 @@ const STYLE = `
 * { box-sizing: border-box; }
 .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
 .grow { flex: 1; min-width: 0; }
-h1 { font-size: 18px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h1 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+.head { padding: 4px 0 8px; }
+.head [data-title-row] { padding: 2px 0 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actions [data-act="close"] { margin-inline-start: auto; }
 button {
   appearance: none; border: 1px solid currentColor; background: transparent; color: inherit;
-  border-radius: 10px; min-width: 44px; height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
+  border-radius: 10px; min-width: 44px; min-height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
 }
 button.on { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
 button.danger { color: var(--accent); }
@@ -53,7 +57,8 @@ li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(
 li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
 .title { font-weight: 600; }
 .meta { color: var(--soft); font-size: 13px; }
-.check { min-width: 32px; width: 32px; height: 32px; padding: 0; border-radius: 8px; border-width: 2px; opacity: 1; flex: none; }
+.check { width: 44px; height: 44px; padding: 0; border: 0; opacity: 1; flex: none; display: grid; place-items: center; }
+.check .box { display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid currentColor; border-radius: 8px; }
 .check .i { width: 20px; height: 20px; }
 .text { flex: 1; overflow-wrap: anywhere; padding: 8px 0; }
 [data-done="true"] .text { text-decoration: line-through; color: var(--done); }
@@ -445,7 +450,7 @@ class ListElement extends HTMLElement {
     const T = (key) => this.T(key);
     const list = this.list;
     return `
-      <div class="bar" data-header></div>
+      <div class="head" data-header></div>
       <p class="status line" data-status aria-live="polite"></p>
       <p class="hint line" data-hint>${this.mayLive ? line("sync-outline", T("liveHint")) : escape(T("needsChat"))}</p>
       <p class="warn line" data-warning role="alert"></p>
@@ -464,14 +469,18 @@ class ListElement extends HTMLElement {
     const live = this.session && (this.status === "joined" || this.status === "waiting");
     const title = this.renaming
       ? `<div class="field wide" data-field="rename"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" value="${escape(list.name)}" aria-label="${escape(T("rename"))}"><button type="button" data-act="commit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></div>`
-      : `<h1 class="grow" data-name>${escape(name)}</h1>`;
+      : `<h1 data-name>${escape(name)}</h1>`;
+    // The title has its own line, whole: on a narrow phone a row shared with five buttons left
+    // it two letters wide. The buttons wrap on the line below.
     header.innerHTML = `
+      <div data-title-row>${title}</div>
+      <div class="actions" data-actions>
       ${button("back", T("back"), "arrow-back-outline")}
-      ${title}
       ${!this.renaming && !list.readOnly ? button("rename", T("rename"), "pencil-outline") : ""}
       ${this.mayLive && !list.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}"><span class="labelled">${icon("sync-outline")}${escape(T("live"))}</span></button>` : ""}
       ${this.place !== LOCAL_PLACE ? button("send", T("send"), "send-outline") : ""}
-      ${button("close", T("close"), "close-outline")}`;
+      ${button("close", T("close"), "close-outline")}
+      </div>`;
   }
 
   paintStatus() {
@@ -526,7 +535,7 @@ class ListElement extends HTMLElement {
           return `<li data-editing="${escape(one.id)}"><div class="field wide" data-field="edit"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" value="${escape(one.text)}" aria-label="${escape(T("edit"))}"><button type="button" data-act="commit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></div>
             ${button("remove", T("remove"), "trash-outline", 'class="danger"')}${button("cancelEdit", T("cancel"), "close-outline")}</li>`;
         }
-        const check = `<button type="button" class="check" data-act="toggle" data-id="${escape(one.id)}" role="checkbox" aria-checked="${one.done}" aria-label="${escape(one.text)}" ${readOnly ? "disabled" : ""}>${one.done ? icon("checkmark-outline") : ""}</button>`;
+        const check = `<button type="button" class="check" data-act="toggle" data-id="${escape(one.id)}" role="checkbox" aria-checked="${one.done}" aria-label="${escape(one.text)}" ${readOnly ? "disabled" : ""}><span class="box">${one.done ? icon("checkmark-outline") : ""}</span></button>`;
         const edit = readOnly ? "" : button("edit", T("edit"), "pencil-outline", `class="plain" data-id="${escape(one.id)}"`);
         return `<li data-item="${escape(one.id)}" data-done="${one.done}">${check}<span class="text">${escape(one.text)}</span>${edit}</li>`;
       })

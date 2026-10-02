@@ -10,10 +10,14 @@ ${t.toString()}`)},kr=class{constructor(e){this.patterns=[],this.$state=e}if(e,t
 * { box-sizing: border-box; }
 .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
 .grow { flex: 1; min-width: 0; }
-h1 { font-size: 18px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h1 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+.head { padding: 4px 0 8px; }
+.head [data-title-row] { padding: 2px 0 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actions [data-act="close"] { margin-inline-start: auto; }
 button {
   appearance: none; border: 1px solid currentColor; background: transparent; color: inherit;
-  border-radius: 10px; min-width: 44px; height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
+  border-radius: 10px; min-width: 44px; min-height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
 }
 button.on { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
 button.danger { color: var(--accent); }
@@ -34,7 +38,8 @@ li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(
 li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
 .title { font-weight: 600; }
 .meta { color: var(--soft); font-size: 13px; }
-.check { min-width: 32px; width: 32px; height: 32px; padding: 0; border-radius: 8px; border-width: 2px; opacity: 1; flex: none; }
+.check { width: 44px; height: 44px; padding: 0; border: 0; opacity: 1; flex: none; display: grid; place-items: center; }
+.check .box { display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid currentColor; border-radius: 8px; }
 .check .i { width: 20px; height: 20px; }
 .text { flex: 1; overflow-wrap: anywhere; padding: 8px 0; }
 [data-done="true"] .text { text-decoration: line-through; color: var(--done); }
@@ -57,20 +62,22 @@ li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-sta
       <div class="field" data-field="new"><input name="value" maxlength="${Ee}" autocomplete="off" placeholder="${m(e("namePlaceholder"))}" aria-label="${m(e("newList"))}"><button type="button" data-act="commit" aria-label="${m(e("newList"))}">${z("add-outline")}</button></div>
       ${this.place===_e?`<p class="hint" data-hint>${m(e("localHint"))}</p>`:""}
       ${t?`<ul>${t}</ul>`:`<p class="empty">${m(e("empty"))}</p>`}`}listScreen(){let e=r=>this.T(r),t=this.list;return`
-      <div class="bar" data-header></div>
+      <div class="head" data-header></div>
       <p class="status line" data-status aria-live="polite"></p>
       <p class="hint line" data-hint>${this.mayLive?Rn("sync-outline",e("liveHint")):m(e("needsChat"))}</p>
       <p class="warn line" data-warning role="alert"></p>
       <p class="note line">${t.readOnly?Rn("download-outline",e("readOnly")):""}</p>
       <div class="invite" data-invite></div>
       ${t.readOnly?"":`<div class="field" data-field="add"><input name="value" maxlength="${It}" autocomplete="off" enterkeyhint="done" placeholder="${m(e("addPlaceholder"))}" aria-label="${m(e("addPlaceholder"))}"><button type="button" data-act="commit" aria-label="${m(e("add"))}">${z("add-outline")}</button></div>`}
-      <ul data-items></ul>`}paintHeader(){let e=this.view?.querySelector("[data-header]");if(!e||!this.list)return;let t=a=>this.T(a),r=this.list,i=r.name||this.pendingTitle||t("untitled"),s=this.session&&(this.status==="joined"||this.status==="waiting"),o=this.renaming?`<div class="field wide" data-field="rename"><input name="value" maxlength="${Ee}" autocomplete="off" value="${m(r.name)}" aria-label="${m(t("rename"))}"><button type="button" data-act="commit" aria-label="${m(t("save"))}">${z("checkmark-outline")}</button></div>`:`<h1 class="grow" data-name>${m(i)}</h1>`;e.innerHTML=`
+      <ul data-items></ul>`}paintHeader(){let e=this.view?.querySelector("[data-header]");if(!e||!this.list)return;let t=a=>this.T(a),r=this.list,i=r.name||this.pendingTitle||t("untitled"),s=this.session&&(this.status==="joined"||this.status==="waiting"),o=this.renaming?`<div class="field wide" data-field="rename"><input name="value" maxlength="${Ee}" autocomplete="off" value="${m(r.name)}" aria-label="${m(t("rename"))}"><button type="button" data-act="commit" aria-label="${m(t("save"))}">${z("checkmark-outline")}</button></div>`:`<h1 data-name>${m(i)}</h1>`;e.innerHTML=`
+      <div data-title-row>${o}</div>
+      <div class="actions" data-actions>
       ${ne("back",t("back"),"arrow-back-outline")}
-      ${o}
       ${!this.renaming&&!r.readOnly?ne("rename",t("rename"),"pencil-outline"):""}
       ${this.mayLive&&!r.readOnly?`<button type="button" data-act="live" class="${s?"on":""}" aria-pressed="${s?"true":"false"}" aria-label="${m(t(s?"stopLive":"live"))}"><span class="labelled">${z("sync-outline")}${m(t("live"))}</span></button>`:""}
       ${this.place!==_e?ne("send",t("send"),"send-outline"):""}
-      ${ne("close",t("close"),"close-outline")}`}paintStatus(){this.paintHeader();let e=this.view?.querySelector("[data-status]");if(!e)return;let t=i=>this.T(i),r={waiting:["sync-outline",t("waiting")],joined:["sync-outline",t("joined")],silent:["person-outline",`${t("silent")} ${t("kept")}`],unreachable:["cloud-offline-outline",`${t("unreachable")} ${t("kept")}`],left:["person-outline",`${t("left")} ${t("kept")}`],outdated:["download-outline",t("outdated")]}[this.status];e.innerHTML=r?Rn(...r):""}paintWarning(){let e=this.view?.querySelector("[data-warning]");e&&(e.innerHTML=this.keeper.full?Rn("alert-circle-outline",this.T("full")):"")}paintInvite(){let e=this.view?.querySelector("[data-invite]");if(e){if(!this.invite){e.innerHTML="";return}e.innerHTML=`${z("person-outline")}<span>${m(this.T("joinPrompt",{name:this.invite.name}))}</span>
+      ${ne("close",t("close"),"close-outline")}
+      </div>`}paintStatus(){this.paintHeader();let e=this.view?.querySelector("[data-status]");if(!e)return;let t=i=>this.T(i),r={waiting:["sync-outline",t("waiting")],joined:["sync-outline",t("joined")],silent:["person-outline",`${t("silent")} ${t("kept")}`],unreachable:["cloud-offline-outline",`${t("unreachable")} ${t("kept")}`],left:["person-outline",`${t("left")} ${t("kept")}`],outdated:["download-outline",t("outdated")]}[this.status];e.innerHTML=r?Rn(...r):""}paintWarning(){let e=this.view?.querySelector("[data-warning]");e&&(e.innerHTML=this.keeper.full?Rn("alert-circle-outline",this.T("full")):"")}paintInvite(){let e=this.view?.querySelector("[data-invite]");if(e){if(!this.invite){e.innerHTML="";return}e.innerHTML=`${z("person-outline")}<span>${m(this.T("joinPrompt",{name:this.invite.name}))}</span>
       <button type="button" data-act="join">${m(this.T("join"))}</button>
       <button type="button" data-act="notNow">${m(this.T("notNow"))}</button>`}}paintItems(){let e=this.view?.querySelector("[data-items]");if(!e||!this.list)return;if(!this.renaming){let a=this.view.querySelector("[data-name]");a&&(a.textContent=this.list.name||this.pendingTitle||this.T("untitled"))}let t=this.list.entries();this.editing&&!t.some(a=>a.id===this.editing)&&(this.editing=null);let r=e.querySelector('[data-field="edit"] input'),i=r&&r.closest("li")?.dataset.editing===this.editing?{value:r.value,focused:this.root.activeElement===r}:null,s=a=>this.T(a),o=this.list.readOnly;if(e.innerHTML=t.map(a=>{if(a.id===this.editing&&!o)return`<li data-editing="${m(a.id)}"><div class="field wide" data-field="edit"><input name="value" maxlength="${It}" autocomplete="off" value="${m(a.text)}" aria-label="${m(s("edit"))}"><button type="button" data-act="commit" aria-label="${m(s("save"))}">${z("checkmark-outline")}</button></div>
-            ${ne("remove",s("remove"),"trash-outline",'class="danger"')}${ne("cancelEdit",s("cancel"),"close-outline")}</li>`;let l=`<button type="button" class="check" data-act="toggle" data-id="${m(a.id)}" role="checkbox" aria-checked="${a.done}" aria-label="${m(a.text)}" ${o?"disabled":""}>${a.done?z("checkmark-outline"):""}</button>`,c=o?"":ne("edit",s("edit"),"pencil-outline",`class="plain" data-id="${m(a.id)}"`);return`<li data-item="${m(a.id)}" data-done="${a.done}">${l}<span class="text">${m(a.text)}</span>${c}</li>`}).join(""),i){let a=e.querySelector('[data-field="edit"] input');a&&(a.value=i.value,i.focused&&a.focus?.())}}};typeof customElements<"u"&&!customElements.get("ft-list")&&customElements.define("ft-list",Xr);export{Qs as FORMAT};
+            ${ne("remove",s("remove"),"trash-outline",'class="danger"')}${ne("cancelEdit",s("cancel"),"close-outline")}</li>`;let l=`<button type="button" class="check" data-act="toggle" data-id="${m(a.id)}" role="checkbox" aria-checked="${a.done}" aria-label="${m(a.text)}" ${o?"disabled":""}><span class="box">${a.done?z("checkmark-outline"):""}</span></button>`,c=o?"":ne("edit",s("edit"),"pencil-outline",`class="plain" data-id="${m(a.id)}"`);return`<li data-item="${m(a.id)}" data-done="${a.done}">${l}<span class="text">${m(a.text)}</span>${c}</li>`}).join(""),i){let a=e.querySelector('[data-field="edit"] input');a&&(a.value=i.value,i.focused&&a.focus?.())}}};typeof customElements<"u"&&!customElements.get("ft-list")&&customElements.define("ft-list",Xr);export{Qs as FORMAT};
