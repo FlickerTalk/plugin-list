@@ -7,6 +7,9 @@ which the two people of a conversation can edit at the same time.
 
 - **Several lists** on the phone. In a list: add an item, tick it, edit it, remove it. Ticked items
   go to the bottom; unticked, an item goes back to where it was.
+- **Lists belong to a conversation.** Opened from a conversation, List shows and opens only the
+  lists of that conversation. Opened outside one (from Settings), it shows this phone's own lists,
+  which never go live.
 - **🔄 Live**, from a conversation: the same list on both phones, each change on the other phone as
   it happens. The other phone opens the list by itself if List is open there; if it is on another
   list, it is offered "📥 The other person opened “Shopping” — Join".
@@ -39,6 +42,9 @@ connection, never stored on our server.
 
 - List sees its own lists. It never sees the conversation, who the contact is, or anything else on
   the phone, and it has no network.
+- From the core it gets an opaque id of the conversation (`chat`), only to keep each
+  conversation's lists apart. The id is this phone's own: it never leaves the phone, not live
+  and not in what 📤 writes.
 - Live messages go through the core's `ft.live`: only over the direct connection between the two
   phones, end-to-end encrypted like every message, never through the mailbox. If the connection is
   relayed by our TURN server, the server sees that there is traffic, never its content.
@@ -49,12 +55,12 @@ connection, never stored on our server.
 
 | Capability   | What for                                                                      |
 | ------------ | ----------------------------------------------------------------------------- |
-| `ft.records` | each list in two records, `list/<id>/meta` and `list/<id>/body`, written on every change (`storage: small`, 4 MB) |
+| `ft.records` | each list in two records, `list/<place>/<id>/meta` and `list/<place>/<id>/body`, written on every change (`storage: small`, 4 MB) |
 | `ft.live`    | live editing, 1 to 1, in messages of at most 48 KiB (bigger ones go in parts) |
 | `ft.say`     | 📤 (`send: propose`: the text lands in the composer and you send it)          |
-| `onOpen`     | `lang`, and `live` (true only from a conversation, with live allowed)         |
+| `onOpen`     | `lang`, `live` (true only from a conversation, with live allowed) and `chat` (the conversation's id, see below) |
 
-Permissions: `{ "live": true, "send": "propose" }`. Needs FlickerTalk core **1.1.0**
+Permissions: `{ "live": true, "send": "propose" }`. Needs FlickerTalk core **1.3.0**
 (`minCoreVersion`). The contract is in [plugin-sdk](https://github.com/FlickerTalk/plugin-sdk).
 
 ## How a list is kept
@@ -64,6 +70,17 @@ A [Yjs](https://github.com/yjs/yjs) document: `items` is a map of item id → ma
 `info` holds `name` and `schema`. A list with a higher `schema` than this plugin knows opens read
 only. The body record is the whole document as one Yjs update in base64; the meta record is JSON
 with the name, the counts, and this phone's side of the live session (`who`, `peer`, `shared`).
+
+**Where.** Since core 1.3.0, `onOpen` brings `chat`: an opaque id of the conversation the plugin
+was opened in, 43 characters of `A-Z a-z 0-9 _ -`, the same every time List opens with that
+contact on this phone, its own to this plugin, and absent outside a conversation. It is local: the
+other phone has a different one, and List never sends it. The place of a list is that `chat`, or
+`local` when there is none or it has any other shape. Records are `list/<place>/<id>/meta|body`
+(at most 118 bytes, under the core's 128), and List lists, opens, saves and deletes only inside the
+place it was opened in. So a list id kept under another conversation is unknown here: a resumed
+hello for it is not answered, and an open hello makes a new, empty list in this conversation,
+separate from the other. `local` lists are this phone's own and never go live, even if the core
+says `live` without a `chat`.
 
 ## The live protocol
 
