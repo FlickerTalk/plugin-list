@@ -62,9 +62,9 @@ describe("the package", () => {
     const element = document.createElement("ft-list");
     document.body.append(element);
     await core.open({ live: false });
-    const form = element.shadowRoot.querySelector('form[data-form="new"]');
-    form.querySelector("input").value = "Compra";
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    const field = element.shadowRoot.querySelector('[data-field="new"]');
+    field.querySelector("input").value = "Compra";
+    field.querySelector('button[data-act="commit"]').click();
     for (let at = 0; at < 50; at += 1) await Promise.resolve();
     await element.keeper.settled();
     expect(element.shadowRoot.querySelector("[data-name]").textContent).toBe("Compra");

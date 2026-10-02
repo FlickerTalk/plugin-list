@@ -44,8 +44,9 @@ button.plain { border: 0; }
 .line { display: flex; gap: 6px; align-items: flex-start; }
 .line .i, .meta .i, .invite .i { flex: none; width: 18px; height: 18px; margin: 1px 0 0; }
 .meta .i { display: inline-block; vertical-align: -3px; }
-form { display: flex; gap: 6px; align-items: center; margin: 0; }
-form.wide { flex: 1; }
+.view { max-inline-size: 640px; margin-inline: auto; }
+.field { display: flex; gap: 6px; align-items: center; margin: 0; }
+.field.wide { flex: 1; }
 input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
 ul { list-style: none; margin: 8px 0 0; padding: 0; }
 li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); min-height: 52px; }
@@ -101,7 +102,6 @@ class ListElement extends HTMLElement {
     this.root.innerHTML = `<style>${STYLE}</style><div class="view"></div>`;
     this.view = this.root.querySelector(".view");
     this.root.addEventListener("click", (event) => this.onClick(event));
-    this.root.addEventListener("submit", (event) => this.onSubmit(event));
     this.root.addEventListener("keydown", (event) => this.onKey(event));
     this.ft.onOpen((opening) => this.onOpen(opening));
     // The frame does not wait for one message to be handled before handing the next.
@@ -278,7 +278,9 @@ class ListElement extends HTMLElement {
     await this.session.hear(message);
   }
 
-  // ---- Clicks and forms ----
+  // ---- Clicks, fields and keys ----
+  // No <form>: the plugin frame is sandboxed without `allow-forms`, and Android's WebView blocks a
+  // form submission before any `submit` event. A field commits on its button's click or on Enter.
 
   async onClick(event) {
     const target = event.target.closest("button[data-act]");
@@ -309,7 +311,7 @@ class ListElement extends HTMLElement {
       case "edit":
         this.editing = id;
         this.paintItems();
-        return this.view.querySelector('form[data-form="edit"] input')?.focus?.();
+        return this.view.querySelector('[data-field="edit"] input')?.focus?.();
       case "cancelEdit":
         this.editing = null;
         return this.paintItems();
@@ -322,7 +324,7 @@ class ListElement extends HTMLElement {
       case "rename":
         this.renaming = true;
         this.paintHeader();
-        return this.view.querySelector('form[data-form="rename"] input')?.focus?.();
+        return this.view.querySelector('[data-field="rename"] input')?.focus?.();
       case "live":
         return this.toggleLive();
       case "send":
@@ -333,6 +335,8 @@ class ListElement extends HTMLElement {
         if (!invite) return;
         return this.join(invite.message, await this.keeper.load(invite.message.doc));
       }
+      case "commit":
+        return this.commit(target.closest("[data-field]"));
       case "notNow":
         this.invite = null;
         return this.paintInvite();
@@ -340,13 +344,12 @@ class ListElement extends HTMLElement {
     }
   }
 
-  async onSubmit(event) {
-    const form = event.target.closest("form[data-form]");
-    if (!form) return;
-    event.preventDefault();
-    const input = form.querySelector("input");
+  /** What a field does with its text: make a list, add an item, edit one, rename the list. */
+  async commit(field) {
+    if (!field) return;
+    const input = field.querySelector("input");
     const value = input?.value ?? "";
-    switch (form.dataset.form) {
+    switch (field.dataset.field) {
       case "new": {
         const list = new List({ name: value });
         await this.keeper.save(list);
@@ -373,6 +376,15 @@ class ListElement extends HTMLElement {
   }
 
   onKey(event) {
+    if (event.key === "Enter") {
+      // The Enter that closes an input method's composition is not a commit.
+      if (event.isComposing || event.keyCode === 229) return;
+      const field = event.target?.closest?.("[data-field]");
+      if (!field || event.target.tagName !== "INPUT") return;
+      event.preventDefault();
+      this.commit(field);
+      return;
+    }
     if (event.key !== "Escape") return;
     if (this.editing) {
       this.editing = null;
@@ -424,7 +436,7 @@ class ListElement extends HTMLElement {
       .join("");
     return `
       <div class="bar"><h1 class="grow">${escape(T("title"))}</h1>${button("close", T("close"), "close-outline")}</div>
-      <form data-form="new"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" placeholder="${escape(T("namePlaceholder"))}" aria-label="${escape(T("newList"))}"><button type="submit" aria-label="${escape(T("newList"))}">${icon("add-outline")}</button></form>
+      <div class="field" data-field="new"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" placeholder="${escape(T("namePlaceholder"))}" aria-label="${escape(T("newList"))}"><button type="button" data-act="commit" aria-label="${escape(T("newList"))}">${icon("add-outline")}</button></div>
       ${this.place === LOCAL_PLACE ? `<p class="hint" data-hint>${escape(T("localHint"))}</p>` : ""}
       ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}`;
   }
@@ -439,7 +451,7 @@ class ListElement extends HTMLElement {
       <p class="warn line" data-warning role="alert"></p>
       <p class="note line">${list.readOnly ? line("download-outline", T("readOnly")) : ""}</p>
       <div class="invite" data-invite></div>
-      ${list.readOnly ? "" : `<form data-form="add"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="submit" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></form>`}
+      ${list.readOnly ? "" : `<div class="field" data-field="add"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="button" data-act="commit" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></div>`}
       <ul data-items></ul>`;
   }
 
@@ -451,7 +463,7 @@ class ListElement extends HTMLElement {
     const name = list.name || this.pendingTitle || T("untitled");
     const live = this.session && (this.status === "joined" || this.status === "waiting");
     const title = this.renaming
-      ? `<form class="wide" data-form="rename"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" value="${escape(list.name)}" aria-label="${escape(T("rename"))}"><button type="submit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></form>`
+      ? `<div class="field wide" data-field="rename"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" value="${escape(list.name)}" aria-label="${escape(T("rename"))}"><button type="button" data-act="commit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></div>`
       : `<h1 class="grow" data-name>${escape(name)}</h1>`;
     header.innerHTML = `
       ${button("back", T("back"), "arrow-back-outline")}
@@ -504,14 +516,14 @@ class ListElement extends HTMLElement {
     }
     const entries = this.list.entries();
     if (this.editing && !entries.some((one) => one.id === this.editing)) this.editing = null;
-    const typing = node.querySelector('form[data-form="edit"] input');
+    const typing = node.querySelector('[data-field="edit"] input');
     const draft = typing && typing.closest("li")?.dataset.editing === this.editing ? { value: typing.value, focused: this.root.activeElement === typing } : null;
     const T = (key) => this.T(key);
     const readOnly = this.list.readOnly;
     node.innerHTML = entries
       .map((one) => {
         if (one.id === this.editing && !readOnly) {
-          return `<li data-editing="${escape(one.id)}"><form class="wide" data-form="edit"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" value="${escape(one.text)}" aria-label="${escape(T("edit"))}"><button type="submit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></form>
+          return `<li data-editing="${escape(one.id)}"><div class="field wide" data-field="edit"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" value="${escape(one.text)}" aria-label="${escape(T("edit"))}"><button type="button" data-act="commit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></div>
             ${button("remove", T("remove"), "trash-outline", 'class="danger"')}${button("cancelEdit", T("cancel"), "close-outline")}</li>`;
         }
         const check = `<button type="button" class="check" data-act="toggle" data-id="${escape(one.id)}" role="checkbox" aria-checked="${one.done}" aria-label="${escape(one.text)}" ${readOnly ? "disabled" : ""}>${one.done ? icon("checkmark-outline") : ""}</button>`;
@@ -520,7 +532,7 @@ class ListElement extends HTMLElement {
       })
       .join("");
     if (draft) {
-      const input = node.querySelector('form[data-form="edit"] input');
+      const input = node.querySelector('[data-field="edit"] input');
       if (input) {
         input.value = draft.value;
         if (draft.focused) input.focus?.();

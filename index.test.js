@@ -42,11 +42,18 @@ async function press(element, act, extra = "") {
   button.click();
   await settle(element);
 }
-async function fill(element, form, value) {
-  const node = inside(element).querySelector(`form[data-form="${form}"]`);
-  if (!node) throw new Error(`no form ${form}`);
-  node.querySelector("input").value = value;
-  node.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+/**
+ * Types in a field and commits it as a person does: a click on its button, or Enter. Never with a
+ * `submit` event: the plugin frame is sandboxed without `allow-forms`, and Android's WebView blocks
+ * a form submission before any `submit` event is fired.
+ */
+async function fill(element, field, value, { by = "click", composing = false } = {}) {
+  const node = inside(element).querySelector(`[data-field="${field}"]`);
+  if (!node) throw new Error(`no field ${field}`);
+  const input = node.querySelector("input");
+  input.value = value;
+  if (by === "enter") input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: composing, bubbles: true, composed: true, cancelable: true }));
+  else node.querySelector('button[data-act="commit"]').click();
   await settle(element);
 }
 const rows = (element) => [...inside(element).querySelectorAll("[data-item]")].map((row) => `${row.dataset.done === "true" ? "☑" : "☐"} ${row.querySelector(".text").textContent}`);
@@ -111,6 +118,42 @@ describe("one phone", () => {
     expect(names.join(" ")).toContain("Súper");
     expect(names.join(" ")).toContain("Tareas");
     expect(JSON.parse(core.records.get(metaKey(LOCAL_PLACE, id)))).toMatchObject({ name: "Súper", total: 1, done: 0 });
+  });
+
+  it("makes, adds, edits and renames with a click of the button and with Enter, without a form", async () => {
+    for (const by of ["click", "enter"]) {
+      document.body.innerHTML = "";
+      const element = await phone(fakeCore(), { live: false });
+      await fill(element, "new", "Compra", { by });
+      expect(inside(element).querySelector("[data-name]")?.textContent, by).toBe("Compra");
+      await fill(element, "add", "leche", { by });
+      await fill(element, "add", "pan", { by });
+      expect(rows(element), by).toEqual(["☐ leche", "☐ pan"]);
+      await press(element, "edit", `[data-id="${itemId(element, "pan")}"]`);
+      await fill(element, "edit", "pan integral", { by });
+      expect(rows(element), by).toEqual(["☐ leche", "☐ pan integral"]);
+      await press(element, "rename");
+      await fill(element, "rename", "Súper", { by });
+      expect(inside(element).querySelector("[data-name]").textContent, by).toBe("Súper");
+      expect(inside(element).querySelector("form"), by).toBeNull();
+    }
+  });
+
+  it("does not take the Enter that closes an input method's composition", async () => {
+    const element = await phone(fakeCore(), { live: false });
+    await fill(element, "new", "Compra");
+    await fill(element, "add", "牛乳", { by: "enter", composing: true });
+    expect(rows(element)).toEqual([]);
+    await fill(element, "add", "牛乳", { by: "enter" });
+    expect(rows(element)).toEqual(["☐ 牛乳"]);
+  });
+
+  it("keeps its content to a comfortable width on a tablet", () => {
+    const element = document.createElement("ft-list");
+    document.body.append(element);
+    const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
+    expect(css).toMatch(/\.view\s*\{[^}]*max-inline-size:\s*640px[^}]*\}/);
+    expect(css).toMatch(/\.view\s*\{[^}]*margin-inline:\s*auto[^}]*\}/);
   });
 
   it("asks inside the plugin before deleting a list, never with confirm()", async () => {
@@ -570,7 +613,7 @@ describe("what the view paints", () => {
   const PICTOGRAPH = /\p{Extended_Pictographic}/u;
   const painted = (element) => inside(element).innerHTML.replace(/<style>[\s\S]*?<\/style>/g, "");
 
-  it("has no emoji in any state or language, only icons, and the buttons keep their labels", async () => {
+  it("has no emoji and no <form> in any state or language, only icons, and the buttons keep their labels", async () => {
     for (const lang of ["en", "es", "ar", "ja"]) {
       document.body.innerHTML = "";
       const seen = [];
@@ -624,6 +667,7 @@ describe("what the view paints", () => {
       await fill(alone, "new", "Solo");
       seen.push(painted(alone));
       for (const html of seen) expect(html, lang).not.toMatch(PICTOGRAPH);
+      for (const html of seen) expect(html, lang).not.toMatch(/<form\b/i);
     }
   });
 });
