@@ -565,3 +565,65 @@ describe("the conversation the plugin is opened in", () => {
     for (const chat of [CHAT_A, CHAT_B]) expect(everything).not.toContain(chat);
   });
 });
+
+describe("what the view paints", () => {
+  const PICTOGRAPH = /\p{Extended_Pictographic}/u;
+  const painted = (element) => inside(element).innerHTML.replace(/<style>[\s\S]*?<\/style>/g, "");
+
+  it("has no emoji in any state or language, only icons, and the buttons keep their labels", async () => {
+    for (const lang of ["en", "es", "ar", "ja"]) {
+      document.body.innerHTML = "";
+      const seen = [];
+      const core = fakeCore({ lang });
+      const element = await phone(core, { live: true, chat: CHAT_A });
+      seen.push(painted(element));
+      await fill(element, "new", "Compra");
+      await fill(element, "add", "leche");
+      await fill(element, "add", "pan");
+      await press(element, "toggle", `[data-id="${itemId(element, "pan")}"]`);
+      seen.push(painted(element));
+      const live = inside(element).querySelector('[data-act="live"]');
+      expect(live.getAttribute("aria-label")).toBeTruthy();
+      expect(live.querySelector('[data-icon="sync-outline"]')).not.toBeNull();
+      expect(inside(element).querySelector('[data-act="send"]').getAttribute("aria-label")).toBeTruthy();
+      const icons = { waiting: "sync-outline", joined: "sync-outline", silent: "person-outline", unreachable: "cloud-offline-outline", left: "person-outline", outdated: "download-outline" };
+      for (const [status, name] of Object.entries(icons)) {
+        element.status = status;
+        element.paintStatus();
+        expect(inside(element).querySelector(`[data-status] [data-icon="${name}"]`), status).not.toBeNull();
+        seen.push(painted(element));
+      }
+      element.keeper.full = true;
+      element.paintWarning();
+      expect(inside(element).querySelector('[data-warning] [data-icon="alert-circle-outline"]')).not.toBeNull();
+      seen.push(painted(element));
+      element.keeper.full = false;
+      element.paintWarning();
+      element.invite = { message: {}, name: "Compra" };
+      element.paintInvite();
+      expect(inside(element).querySelector('[data-invite] [data-icon="person-outline"]')).not.toBeNull();
+      seen.push(painted(element));
+      element.invite = null;
+      element.paintInvite();
+      await press(element, "edit", `[data-id="${itemId(element, "leche")}"]`);
+      seen.push(painted(element));
+      await press(element, "cancelEdit");
+      await press(element, "rename");
+      seen.push(painted(element));
+      element.list.shared = true;
+      await element.keeper.save(element.list);
+      await press(element, "back");
+      expect(inside(element).querySelector('[data-act="open"] [data-icon="sync-outline"]')).not.toBeNull();
+      seen.push(painted(element));
+      await press(element, "delete");
+      seen.push(painted(element));
+
+      document.body.innerHTML = "";
+      const alone = await phone(fakeCore({ lang }), { live: false });
+      seen.push(painted(alone));
+      await fill(alone, "new", "Solo");
+      seen.push(painted(alone));
+      for (const html of seen) expect(html, lang).not.toMatch(PICTOGRAPH);
+    }
+  });
+});

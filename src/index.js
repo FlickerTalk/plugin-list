@@ -1,12 +1,13 @@
 // List for FlickerTalk (plan-plugins-nuevos §7): shopping or to-do lists kept on this phone; add,
-// tick, edit, remove; ticked items go down. From a conversation, "🔄 Live" lets the two phones edit
+// tick, edit, remove; ticked items go down. From a conversation, "Live" lets the two phones edit
 // one list at once over the core's direct channel (`live.js`); what each does apart is kept here
-// and joins the other's when both have the list open. 📤 puts the list in the composer as text.
+// and joins the other's when both have the list open. Send puts the list in the composer as text.
 // Nothing leaves this frame but what the user sends, and what live says to the same plugin on the
 // other phone.
 
 import { name as APP_NAME, version as APP_VERSION } from "../module.json";
 import { dirOf, makeT } from "./i18n.js";
+import { icon } from "./icons.js";
 import { HELLO, Inbox, LiveSession, inOrder, isNewer } from "./live.js";
 import { yjsReplica } from "./live-yjs.js";
 import { LOCAL_PLACE, List, MAX_NAME, MAX_TEXT, placeOf } from "./model.js";
@@ -37,6 +38,12 @@ button.on { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
 button.danger { color: var(--accent); }
 button.plain { border: 0; }
 .i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
+.i.svg { background: none; -webkit-mask: none; mask: none; fill: currentColor; }
+.labelled { display: inline-flex; gap: 6px; align-items: center; }
+.labelled .i { margin: 0; width: 20px; height: 20px; }
+.line { display: flex; gap: 6px; align-items: flex-start; }
+.line .i, .meta .i, .invite .i { flex: none; width: 18px; height: 18px; margin: 1px 0 0; }
+.meta .i { display: inline-block; vertical-align: -3px; }
 form { display: flex; gap: 6px; align-items: center; margin: 0; }
 form.wide { flex: 1; }
 input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
@@ -62,7 +69,8 @@ li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-sta
 .empty { color: var(--soft); text-align: center; padding: 40px 0; }
 `;
 
-const icon = (name) => `<i class="i" style="--i:url(./icon/${name}.svg)"></i>`;
+/** A line of text with its icon beside it; the icon is decoration, the text says it all. */
+const line = (name, text) => (text ? `${icon(name)}<span>${escape(text)}</span>` : "");
 const button = (act, label, name, extra = "") => `<button type="button" data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name)}</button>`;
 
 /** The plugin's view: the lists this phone keeps, or one list. */
@@ -375,7 +383,7 @@ class ListElement extends HTMLElement {
     }
   }
 
-  /** 📤: the list as text in the composer. The app closes the plugin, so leave cleanly first. */
+  /** Send: the list as text in the composer. The app closes the plugin, so leave cleanly first. */
   async sendList() {
     // Outside a conversation there is no composer: `say` would do nothing and the list would be gone.
     if (!this.list || this.place === LOCAL_PLACE) return;
@@ -409,7 +417,7 @@ class ListElement extends HTMLElement {
             <button type="button" data-act="cancelDelete">${escape(T("cancel"))}</button></li>`;
         }
         const progress = T("progress", { done: this.number(meta.done ?? 0), total: this.number(meta.total ?? 0) });
-        const shared = meta.shared ? ` · 🔄 ${escape(T("shared"))}` : "";
+        const shared = meta.shared ? ` · ${icon("sync-outline")} ${escape(T("shared"))}` : "";
         return `<li><button type="button" class="open" data-act="open" data-id="${escape(meta.id)}"><span class="title">${escape(name)}</span><span class="meta">${escape(progress)}${shared}</span></button>
           ${button("delete", T("delete"), "trash-outline", `data-id="${escape(meta.id)}"`)}</li>`;
       })
@@ -426,10 +434,10 @@ class ListElement extends HTMLElement {
     const list = this.list;
     return `
       <div class="bar" data-header></div>
-      <p class="status" data-status aria-live="polite"></p>
-      <p class="hint" data-hint>${escape(this.mayLive ? T("liveHint") : T("needsChat"))}</p>
-      <p class="warn" data-warning role="alert"></p>
-      <p class="note">${list.readOnly ? escape(T("readOnly")) : ""}</p>
+      <p class="status line" data-status aria-live="polite"></p>
+      <p class="hint line" data-hint>${this.mayLive ? line("sync-outline", T("liveHint")) : escape(T("needsChat"))}</p>
+      <p class="warn line" data-warning role="alert"></p>
+      <p class="note line">${list.readOnly ? line("download-outline", T("readOnly")) : ""}</p>
       <div class="invite" data-invite></div>
       ${list.readOnly ? "" : `<form data-form="add"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="submit" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></form>`}
       <ul data-items></ul>`;
@@ -449,7 +457,7 @@ class ListElement extends HTMLElement {
       ${button("back", T("back"), "arrow-back-outline")}
       ${title}
       ${!this.renaming && !list.readOnly ? button("rename", T("rename"), "pencil-outline") : ""}
-      ${this.mayLive && !list.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">🔄 ${escape(T("live"))}</button>` : ""}
+      ${this.mayLive && !list.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}"><span class="labelled">${icon("sync-outline")}${escape(T("live"))}</span></button>` : ""}
       ${this.place !== LOCAL_PLACE ? button("send", T("send"), "send-outline") : ""}
       ${button("close", T("close"), "close-outline")}`;
   }
@@ -459,20 +467,20 @@ class ListElement extends HTMLElement {
     const node = this.view?.querySelector("[data-status]");
     if (!node) return;
     const T = (key) => this.T(key);
-    const texts = {
-      waiting: T("waiting"),
-      joined: T("joined"),
-      silent: `${T("silent")} ${T("kept")}`,
-      unreachable: `${T("unreachable")} ${T("kept")}`,
-      left: `${T("left")} ${T("kept")}`,
-      outdated: T("outdated"),
-    };
-    node.textContent = texts[this.status] ?? "";
+    const shown = {
+      waiting: ["sync-outline", T("waiting")],
+      joined: ["sync-outline", T("joined")],
+      silent: ["person-outline", `${T("silent")} ${T("kept")}`],
+      unreachable: ["cloud-offline-outline", `${T("unreachable")} ${T("kept")}`],
+      left: ["person-outline", `${T("left")} ${T("kept")}`],
+      outdated: ["download-outline", T("outdated")],
+    }[this.status];
+    node.innerHTML = shown ? line(...shown) : "";
   }
 
   paintWarning() {
     const node = this.view?.querySelector("[data-warning]");
-    if (node) node.textContent = this.keeper.full ? this.T("full") : "";
+    if (node) node.innerHTML = this.keeper.full ? line("alert-circle-outline", this.T("full")) : "";
   }
 
   paintInvite() {
@@ -482,7 +490,7 @@ class ListElement extends HTMLElement {
       node.innerHTML = "";
       return;
     }
-    node.innerHTML = `<span>${escape(this.T("joinPrompt", { name: this.invite.name }))}</span>
+    node.innerHTML = `${icon("person-outline")}<span>${escape(this.T("joinPrompt", { name: this.invite.name }))}</span>
       <button type="button" data-act="join">${escape(this.T("join"))}</button>
       <button type="button" data-act="notNow">${escape(this.T("notNow"))}</button>`;
   }

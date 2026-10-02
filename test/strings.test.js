@@ -17,4 +17,8 @@ describe("List's catalogue", () => {
     for (const lang of LANGUAGES) for (const text of Object.values(STRINGS[lang])) expect(text, lang).not.toMatch(/(?<![\p{L}\p{N}])List(?![\p{L}\p{N}])/u);
     expect(t("es", "empty")).toBe("Todavía no hay listas");
   });
+
+  it("has no emoji in any language: the view draws icons beside the text", () => {
+    for (const lang of LANGUAGES) for (const [key, text] of Object.entries(STRINGS[lang])) expect(text, `${lang}.${key}`).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
 });
