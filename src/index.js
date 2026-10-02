@@ -1,12 +1,13 @@
 // List for FlickerTalk (plan-plugins-nuevos §7): shopping or to-do lists kept on this phone; add,
-// tick, edit, remove; ticked items go down. From a conversation, "🔄 Live" lets the two phones edit
+// tick, edit, remove; ticked items go down. From a conversation, "Live" lets the two phones edit
 // one list at once over the core's direct channel (`live.js`); what each does apart is kept here
-// and joins the other's when both have the list open. 📤 puts the list in the composer as text.
+// and joins the other's when both have the list open. Send puts the list in the composer as text.
 // Nothing leaves this frame but what the user sends, and what live says to the same plugin on the
 // other phone.
 
 import { name as APP_NAME, version as APP_VERSION } from "../module.json";
 import { dirOf, makeT } from "./i18n.js";
+import { icon } from "./icons.js";
 import { HELLO, Inbox, LiveSession, inOrder, isNewer } from "./live.js";
 import { yjsReplica } from "./live-yjs.js";
 import { LOCAL_PLACE, List, MAX_NAME, MAX_TEXT, placeOf } from "./model.js";
@@ -24,28 +25,40 @@ const escape = (text) =>
 const STYLE = `
 :host { display: block; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --done: #8a8a8a; }
 @media (prefers-color-scheme: dark) { :host { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --done: #888; } }
-:host-context([data-dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --done: #888; }
+:host([dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --done: #888; }
 * { box-sizing: border-box; }
 .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
 .grow { flex: 1; min-width: 0; }
-h1 { font-size: 18px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h1 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+.head { padding: 4px 0 8px; }
+.head [data-title-row] { padding: 2px 0 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actions [data-act="close"] { margin-inline-start: auto; }
 button {
   appearance: none; border: 1px solid currentColor; background: transparent; color: inherit;
-  border-radius: 10px; min-width: 44px; height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
+  border-radius: 10px; min-width: 44px; min-height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
 }
 button.on { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
 button.danger { color: var(--accent); }
 button.plain { border: 0; }
 .i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
-form { display: flex; gap: 6px; align-items: center; margin: 0; }
-form.wide { flex: 1; }
+.i.svg { background: none; -webkit-mask: none; mask: none; fill: currentColor; }
+.labelled { display: inline-flex; gap: 6px; align-items: center; }
+.labelled .i { margin: 0; width: 20px; height: 20px; }
+.line { display: flex; gap: 6px; align-items: flex-start; }
+.line .i, .meta .i, .invite .i { flex: none; width: 18px; height: 18px; margin: 1px 0 0; }
+.meta .i { display: inline-block; vertical-align: -3px; }
+.view { max-inline-size: 640px; margin-inline: auto; }
+.field { display: flex; gap: 6px; align-items: center; margin: 0; }
+.field.wide { flex: 1; }
 input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
 ul { list-style: none; margin: 8px 0 0; padding: 0; }
 li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); min-height: 52px; }
 li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
 .title { font-weight: 600; }
 .meta { color: var(--soft); font-size: 13px; }
-.check { min-width: 32px; width: 32px; height: 32px; padding: 0; border-radius: 8px; border-width: 2px; opacity: 1; flex: none; }
+.check { width: 44px; height: 44px; padding: 0; border: 0; opacity: 1; flex: none; display: grid; place-items: center; }
+.check .box { display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid currentColor; border-radius: 8px; }
 .check .i { width: 20px; height: 20px; }
 .text { flex: 1; overflow-wrap: anywhere; padding: 8px 0; }
 [data-done="true"] .text { text-decoration: line-through; color: var(--done); }
@@ -62,7 +75,8 @@ li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-sta
 .empty { color: var(--soft); text-align: center; padding: 40px 0; }
 `;
 
-const icon = (name) => `<i class="i" style="--i:url(./icon/${name}.svg)"></i>`;
+/** A line of text with its icon beside it; the icon is decoration, the text says it all. */
+const line = (name, text) => (text ? `${icon(name)}<span>${escape(text)}</span>` : "");
 const button = (act, label, name, extra = "") => `<button type="button" data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name)}</button>`;
 
 /** The plugin's view: the lists this phone keeps, or one list. */
@@ -70,7 +84,8 @@ class ListElement extends HTMLElement {
   constructor() {
     super();
     this.root = this.attachShadow({ mode: "open" });
-    this.lang = "en";
+    // Not `this.lang`: it reflects to the `lang` attribute, and a constructor may set none.
+    this.language = "en";
     this.mayLive = false;
     this.screen = "home";
     this.metas = [];
@@ -93,7 +108,6 @@ class ListElement extends HTMLElement {
     this.root.innerHTML = `<style>${STYLE}</style><div class="view"></div>`;
     this.view = this.root.querySelector(".view");
     this.root.addEventListener("click", (event) => this.onClick(event));
-    this.root.addEventListener("submit", (event) => this.onSubmit(event));
     this.root.addEventListener("keydown", (event) => this.onKey(event));
     this.ft.onOpen((opening) => this.onOpen(opening));
     // The frame does not wait for one message to be handled before handing the next.
@@ -102,12 +116,12 @@ class ListElement extends HTMLElement {
   }
 
   T(key, holes = {}) {
-    return t(this.lang, key, { app: APP_NAME, ...holes });
+    return t(this.language, key, { app: APP_NAME, ...holes });
   }
 
   number(value) {
     try {
-      return new Intl.NumberFormat(this.lang).format(value);
+      return new Intl.NumberFormat(this.language).format(value);
     } catch {
       return String(value);
     }
@@ -116,7 +130,7 @@ class ListElement extends HTMLElement {
   // ---- What the app hands over ----
 
   async onOpen(opening) {
-    this.lang = opening.lang || "en";
+    this.language = opening.lang || "en";
     // The lists of a conversation live under its id (`chat`, core 1.3.0), which never leaves this
     // phone; without one (opened from Settings, or malformed) they are this phone's own, never
     // live, even if the core said `live`.
@@ -124,8 +138,12 @@ class ListElement extends HTMLElement {
     this.keeper = new Keeper(this.ft.records, this.place);
     this.keeper.onFull(() => this.paintWarning());
     this.mayLive = Boolean(opening.live) && this.place !== LOCAL_PLACE;
-    this.setAttribute("lang", this.lang);
-    this.setAttribute("dir", dirOf(this.lang));
+    this.setAttribute("lang", this.language);
+    this.setAttribute("dir", dirOf(this.language));
+    // Dark when the app says so: `:host([dark])` works in WebKit too (`:host-context` does not).
+    // The system's dark mode stays as a fallback in the stylesheet.
+    if (opening.dark) this.setAttribute("dark", "");
+    else this.removeAttribute("dark");
     this.metas = await this.keeper.index();
     this.paint();
   }
@@ -266,7 +284,9 @@ class ListElement extends HTMLElement {
     await this.session.hear(message);
   }
 
-  // ---- Clicks and forms ----
+  // ---- Clicks, fields and keys ----
+  // No <form>: the plugin frame is sandboxed without `allow-forms`, and Android's WebView blocks a
+  // form submission before any `submit` event. A field commits on its button's click or on Enter.
 
   async onClick(event) {
     const target = event.target.closest("button[data-act]");
@@ -297,7 +317,7 @@ class ListElement extends HTMLElement {
       case "edit":
         this.editing = id;
         this.paintItems();
-        return this.view.querySelector('form[data-form="edit"] input')?.focus?.();
+        return this.view.querySelector('[data-field="edit"] input')?.focus?.();
       case "cancelEdit":
         this.editing = null;
         return this.paintItems();
@@ -310,7 +330,7 @@ class ListElement extends HTMLElement {
       case "rename":
         this.renaming = true;
         this.paintHeader();
-        return this.view.querySelector('form[data-form="rename"] input')?.focus?.();
+        return this.view.querySelector('[data-field="rename"] input')?.focus?.();
       case "live":
         return this.toggleLive();
       case "send":
@@ -321,6 +341,8 @@ class ListElement extends HTMLElement {
         if (!invite) return;
         return this.join(invite.message, await this.keeper.load(invite.message.doc));
       }
+      case "commit":
+        return this.commit(target.closest("[data-field]"));
       case "notNow":
         this.invite = null;
         return this.paintInvite();
@@ -328,13 +350,12 @@ class ListElement extends HTMLElement {
     }
   }
 
-  async onSubmit(event) {
-    const form = event.target.closest("form[data-form]");
-    if (!form) return;
-    event.preventDefault();
-    const input = form.querySelector("input");
+  /** What a field does with its text: make a list, add an item, edit one, rename the list. */
+  async commit(field) {
+    if (!field) return;
+    const input = field.querySelector("input");
     const value = input?.value ?? "";
-    switch (form.dataset.form) {
+    switch (field.dataset.field) {
       case "new": {
         const list = new List({ name: value });
         await this.keeper.save(list);
@@ -361,6 +382,15 @@ class ListElement extends HTMLElement {
   }
 
   onKey(event) {
+    if (event.key === "Enter") {
+      // The Enter that closes an input method's composition is not a commit.
+      if (event.isComposing || event.keyCode === 229) return;
+      const field = event.target?.closest?.("[data-field]");
+      if (!field || event.target.tagName !== "INPUT") return;
+      event.preventDefault();
+      this.commit(field);
+      return;
+    }
     if (event.key !== "Escape") return;
     if (this.editing) {
       this.editing = null;
@@ -371,9 +401,10 @@ class ListElement extends HTMLElement {
     }
   }
 
-  /** 📤: the list as text in the composer. The app closes the plugin, so leave cleanly first. */
+  /** Send: the list as text in the composer. The app closes the plugin, so leave cleanly first. */
   async sendList() {
-    if (!this.list) return;
+    // Outside a conversation there is no composer: `say` would do nothing and the list would be gone.
+    if (!this.list || this.place === LOCAL_PLACE) return;
     const text = this.list.summary(this.T("untitled"));
     await this.leave();
     this.ft.say(text);
@@ -404,14 +435,14 @@ class ListElement extends HTMLElement {
             <button type="button" data-act="cancelDelete">${escape(T("cancel"))}</button></li>`;
         }
         const progress = T("progress", { done: this.number(meta.done ?? 0), total: this.number(meta.total ?? 0) });
-        const shared = meta.shared ? ` · 🔄 ${escape(T("shared"))}` : "";
+        const shared = meta.shared ? ` · ${icon("sync-outline")} ${escape(T("shared"))}` : "";
         return `<li><button type="button" class="open" data-act="open" data-id="${escape(meta.id)}"><span class="title">${escape(name)}</span><span class="meta">${escape(progress)}${shared}</span></button>
           ${button("delete", T("delete"), "trash-outline", `data-id="${escape(meta.id)}"`)}</li>`;
       })
       .join("");
     return `
       <div class="bar"><h1 class="grow">${escape(T("title"))}</h1>${button("close", T("close"), "close-outline")}</div>
-      <form data-form="new"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" placeholder="${escape(T("namePlaceholder"))}" aria-label="${escape(T("newList"))}"><button type="submit" aria-label="${escape(T("newList"))}">${icon("add-outline")}</button></form>
+      <div class="field" data-field="new"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" placeholder="${escape(T("namePlaceholder"))}" aria-label="${escape(T("newList"))}"><button type="button" data-act="commit" aria-label="${escape(T("newList"))}">${icon("add-outline")}</button></div>
       ${this.place === LOCAL_PLACE ? `<p class="hint" data-hint>${escape(T("localHint"))}</p>` : ""}
       ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}`;
   }
@@ -420,13 +451,13 @@ class ListElement extends HTMLElement {
     const T = (key) => this.T(key);
     const list = this.list;
     return `
-      <div class="bar" data-header></div>
-      <p class="status" data-status aria-live="polite"></p>
-      <p class="hint" data-hint>${escape(this.mayLive ? T("liveHint") : T("needsChat"))}</p>
-      <p class="warn" data-warning role="alert"></p>
-      <p class="note">${list.readOnly ? escape(T("readOnly")) : ""}</p>
+      <div class="head" data-header></div>
+      <p class="status line" data-status aria-live="polite"></p>
+      <p class="hint line" data-hint>${this.mayLive ? line("sync-outline", T("liveHint")) : escape(T("needsChat"))}</p>
+      <p class="warn line" data-warning role="alert"></p>
+      <p class="note line">${list.readOnly ? line("download-outline", T("readOnly")) : ""}</p>
       <div class="invite" data-invite></div>
-      ${list.readOnly ? "" : `<form data-form="add"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="submit" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></form>`}
+      ${list.readOnly ? "" : `<div class="field" data-field="add"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="button" data-act="commit" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></div>`}
       <ul data-items></ul>`;
   }
 
@@ -438,15 +469,19 @@ class ListElement extends HTMLElement {
     const name = list.name || this.pendingTitle || T("untitled");
     const live = this.session && (this.status === "joined" || this.status === "waiting");
     const title = this.renaming
-      ? `<form class="wide" data-form="rename"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" value="${escape(list.name)}" aria-label="${escape(T("rename"))}"><button type="submit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></form>`
-      : `<h1 class="grow" data-name>${escape(name)}</h1>`;
+      ? `<div class="field wide" data-field="rename"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" value="${escape(list.name)}" aria-label="${escape(T("rename"))}"><button type="button" data-act="commit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></div>`
+      : `<h1 data-name>${escape(name)}</h1>`;
+    // The title has its own line, whole: on a narrow phone a row shared with five buttons left
+    // it two letters wide. The buttons wrap on the line below.
     header.innerHTML = `
+      <div data-title-row>${title}</div>
+      <div class="actions" data-actions>
       ${button("back", T("back"), "arrow-back-outline")}
-      ${title}
       ${!this.renaming && !list.readOnly ? button("rename", T("rename"), "pencil-outline") : ""}
-      ${this.mayLive && !list.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">🔄 ${escape(T("live"))}</button>` : ""}
-      ${button("send", T("send"), "send-outline")}
-      ${button("close", T("close"), "close-outline")}`;
+      ${this.mayLive && !list.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}"><span class="labelled">${icon("sync-outline")}${escape(T("live"))}</span></button>` : ""}
+      ${this.place !== LOCAL_PLACE ? button("send", T("send"), "send-outline") : ""}
+      ${button("close", T("close"), "close-outline")}
+      </div>`;
   }
 
   paintStatus() {
@@ -454,20 +489,20 @@ class ListElement extends HTMLElement {
     const node = this.view?.querySelector("[data-status]");
     if (!node) return;
     const T = (key) => this.T(key);
-    const texts = {
-      waiting: T("waiting"),
-      joined: T("joined"),
-      silent: `${T("silent")} ${T("kept")}`,
-      unreachable: `${T("unreachable")} ${T("kept")}`,
-      left: `${T("left")} ${T("kept")}`,
-      outdated: T("outdated"),
-    };
-    node.textContent = texts[this.status] ?? "";
+    const shown = {
+      waiting: ["sync-outline", T("waiting")],
+      joined: ["sync-outline", T("joined")],
+      silent: ["person-outline", `${T("silent")} ${T("kept")}`],
+      unreachable: ["cloud-offline-outline", `${T("unreachable")} ${T("kept")}`],
+      left: ["person-outline", `${T("left")} ${T("kept")}`],
+      outdated: ["download-outline", T("outdated")],
+    }[this.status];
+    node.innerHTML = shown ? line(...shown) : "";
   }
 
   paintWarning() {
     const node = this.view?.querySelector("[data-warning]");
-    if (node) node.textContent = this.keeper.full ? this.T("full") : "";
+    if (node) node.innerHTML = this.keeper.full ? line("alert-circle-outline", this.T("full")) : "";
   }
 
   paintInvite() {
@@ -477,7 +512,7 @@ class ListElement extends HTMLElement {
       node.innerHTML = "";
       return;
     }
-    node.innerHTML = `<span>${escape(this.T("joinPrompt", { name: this.invite.name }))}</span>
+    node.innerHTML = `${icon("person-outline")}<span>${escape(this.T("joinPrompt", { name: this.invite.name }))}</span>
       <button type="button" data-act="join">${escape(this.T("join"))}</button>
       <button type="button" data-act="notNow">${escape(this.T("notNow"))}</button>`;
   }
@@ -491,23 +526,23 @@ class ListElement extends HTMLElement {
     }
     const entries = this.list.entries();
     if (this.editing && !entries.some((one) => one.id === this.editing)) this.editing = null;
-    const typing = node.querySelector('form[data-form="edit"] input');
+    const typing = node.querySelector('[data-field="edit"] input');
     const draft = typing && typing.closest("li")?.dataset.editing === this.editing ? { value: typing.value, focused: this.root.activeElement === typing } : null;
     const T = (key) => this.T(key);
     const readOnly = this.list.readOnly;
     node.innerHTML = entries
       .map((one) => {
         if (one.id === this.editing && !readOnly) {
-          return `<li data-editing="${escape(one.id)}"><form class="wide" data-form="edit"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" value="${escape(one.text)}" aria-label="${escape(T("edit"))}"><button type="submit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></form>
+          return `<li data-editing="${escape(one.id)}"><div class="field wide" data-field="edit"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" value="${escape(one.text)}" aria-label="${escape(T("edit"))}"><button type="button" data-act="commit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></div>
             ${button("remove", T("remove"), "trash-outline", 'class="danger"')}${button("cancelEdit", T("cancel"), "close-outline")}</li>`;
         }
-        const check = `<button type="button" class="check" data-act="toggle" data-id="${escape(one.id)}" role="checkbox" aria-checked="${one.done}" aria-label="${escape(one.text)}" ${readOnly ? "disabled" : ""}>${one.done ? icon("checkmark-outline") : ""}</button>`;
+        const check = `<button type="button" class="check" data-act="toggle" data-id="${escape(one.id)}" role="checkbox" aria-checked="${one.done}" aria-label="${escape(one.text)}" ${readOnly ? "disabled" : ""}><span class="box">${one.done ? icon("checkmark-outline") : ""}</span></button>`;
         const edit = readOnly ? "" : button("edit", T("edit"), "pencil-outline", `class="plain" data-id="${escape(one.id)}"`);
         return `<li data-item="${escape(one.id)}" data-done="${one.done}">${check}<span class="text">${escape(one.text)}</span>${edit}</li>`;
       })
       .join("");
     if (draft) {
-      const input = node.querySelector('form[data-form="edit"] input');
+      const input = node.querySelector('[data-field="edit"] input');
       if (input) {
         input.value = draft.value;
         if (draft.focused) input.focus?.();

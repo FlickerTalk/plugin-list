@@ -42,11 +42,18 @@ async function press(element, act, extra = "") {
   button.click();
   await settle(element);
 }
-async function fill(element, form, value) {
-  const node = inside(element).querySelector(`form[data-form="${form}"]`);
-  if (!node) throw new Error(`no form ${form}`);
-  node.querySelector("input").value = value;
-  node.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+/**
+ * Types in a field and commits it as a person does: a click on its button, or Enter. Never with a
+ * `submit` event: the plugin frame is sandboxed without `allow-forms`, and Android's WebView blocks
+ * a form submission before any `submit` event is fired.
+ */
+async function fill(element, field, value, { by = "click", composing = false } = {}) {
+  const node = inside(element).querySelector(`[data-field="${field}"]`);
+  if (!node) throw new Error(`no field ${field}`);
+  const input = node.querySelector("input");
+  input.value = value;
+  if (by === "enter") input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: composing, bubbles: true, composed: true, cancelable: true }));
+  else node.querySelector('button[data-act="commit"]').click();
   await settle(element);
 }
 const rows = (element) => [...inside(element).querySelectorAll("[data-item]")].map((row) => `${row.dataset.done === "true" ? "☑" : "☐"} ${row.querySelector(".text").textContent}`);
@@ -113,6 +120,82 @@ describe("one phone", () => {
     expect(JSON.parse(core.records.get(metaKey(LOCAL_PLACE, id)))).toMatchObject({ name: "Súper", total: 1, done: 0 });
   });
 
+  it("makes, adds, edits and renames with a click of the button and with Enter, without a form", async () => {
+    for (const by of ["click", "enter"]) {
+      document.body.innerHTML = "";
+      const element = await phone(fakeCore(), { live: false });
+      await fill(element, "new", "Compra", { by });
+      expect(inside(element).querySelector("[data-name]")?.textContent, by).toBe("Compra");
+      await fill(element, "add", "leche", { by });
+      await fill(element, "add", "pan", { by });
+      expect(rows(element), by).toEqual(["☐ leche", "☐ pan"]);
+      await press(element, "edit", `[data-id="${itemId(element, "pan")}"]`);
+      await fill(element, "edit", "pan integral", { by });
+      expect(rows(element), by).toEqual(["☐ leche", "☐ pan integral"]);
+      await press(element, "rename");
+      await fill(element, "rename", "Súper", { by });
+      expect(inside(element).querySelector("[data-name]").textContent, by).toBe("Súper");
+      expect(inside(element).querySelector("form"), by).toBeNull();
+    }
+  });
+
+  it("does not take the Enter that closes an input method's composition", async () => {
+    const element = await phone(fakeCore(), { live: false });
+    await fill(element, "new", "Compra");
+    await fill(element, "add", "牛乳", { by: "enter", composing: true });
+    expect(rows(element)).toEqual([]);
+    await fill(element, "add", "牛乳", { by: "enter" });
+    expect(rows(element)).toEqual(["☐ 牛乳"]);
+  });
+
+  it("puts a list's title on its own line, whole, and the buttons on the line below, at 44 px", async () => {
+    const element = await phone(fakeCore(), { live: true, chat: CHAT_A });
+    const long = "Compra de la semana para la casa del pueblo";
+    await fill(element, "new", long);
+    const header = inside(element).querySelector("[data-header]");
+    const titleRow = header.querySelector(":scope > [data-title-row]");
+    const actions = header.querySelector(":scope > [data-actions]");
+    expect(titleRow).not.toBeNull();
+    expect(actions).not.toBeNull();
+    expect(titleRow.querySelector("[data-name]").textContent).toBe(long);
+    expect(titleRow.querySelector("button")).toBeNull();
+    for (const act of ["back", "rename", "live", "send", "close"]) expect(actions.querySelector(`[data-act="${act}"]`), act).not.toBeNull();
+    // While renaming, the field takes the title's line, not the buttons'.
+    await press(element, "rename");
+    expect(inside(element).querySelector('[data-title-row] [data-field="rename"]')).not.toBeNull();
+    const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
+    expect(css).not.toContain("ellipsis");
+    expect(css).toMatch(/\.actions\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(css).toMatch(/button\s*\{[^}]*min-width:\s*44px[^}]*\}/);
+    expect(css).toMatch(/button\s*\{[^}]*min-height:\s*44px[^}]*\}/);
+    expect(css).toMatch(/h1\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    // The tick box too: a 44 px target around the drawn box.
+    expect(css).not.toMatch(/\.check\s*\{[^}]*(width|height):\s*(?:[0-3]\d|4[0-3])px/);
+  });
+
+  it("is born without attributes or children, as a custom element's constructor must be", async () => {
+    // A real browser throws NotSupportedError from createElement if the constructor sets one
+    // (`this.lang = …` reflects to the `lang` attribute).
+    const element = document.createElement("ft-list");
+    expect([...element.attributes].map((one) => one.name)).toEqual([]);
+    expect(element.childNodes).toHaveLength(0);
+    // The language and the direction are set when the app opens it.
+    const core = fakeCore({ lang: "ar" });
+    globalThis.ft = core.ft;
+    document.body.append(element);
+    await core.open({ live: false });
+    expect(element.getAttribute("lang")).toBe("ar");
+    expect(element.getAttribute("dir")).toBe("rtl");
+  });
+
+  it("keeps its content to a comfortable width on a tablet", () => {
+    const element = document.createElement("ft-list");
+    document.body.append(element);
+    const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
+    expect(css).toMatch(/\.view\s*\{[^}]*max-inline-size:\s*640px[^}]*\}/);
+    expect(css).toMatch(/\.view\s*\{[^}]*margin-inline:\s*auto[^}]*\}/);
+  });
+
   it("asks inside the plugin before deleting a list, never with confirm()", async () => {
     const core = fakeCore();
     globalThis.confirm = vi.fn(() => true);
@@ -133,13 +216,39 @@ describe("one phone", () => {
 
   it("proposes the list as text in the chat, after keeping it", async () => {
     const core = fakeCore();
-    const element = await phone(core, { live: false });
+    const element = await phone(core, { live: false, chat: CHAT_A });
     await fill(element, "new", "Compra");
     await fill(element, "add", "leche");
     await fill(element, "add", "pan");
     await press(element, "toggle", `[data-id="${itemId(element, "pan")}"]`);
     await press(element, "send");
     expect(core.said).toEqual(["🛒 Compra\n☐ leche\n☑ pan"]);
+  });
+
+  it("offers no 📤 outside a conversation, and sending there does nothing and keeps the list usable", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false });
+    await fill(element, "new", "Compra");
+    await fill(element, "add", "leche");
+    expect(inside(element).querySelector('[data-act="send"]')).toBeNull();
+    await element.sendList();
+    await settle(element);
+    expect(core.ft.say).not.toHaveBeenCalled();
+    expect(element.list?.name).toBe("Compra");
+    await fill(element, "add", "pan");
+    expect(rows(element)).toEqual(["☐ leche", "☐ pan"]);
+  });
+
+  it("goes dark when the app says so, also where :host-context does not exist (WebKit)", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false, dark: true });
+    expect(element.hasAttribute("dark")).toBe(true);
+    await core.open({ live: false, dark: false });
+    expect(element.hasAttribute("dark")).toBe(false);
+    const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
+    expect(css).toContain(":host([dark])");
+    expect(css).toContain("prefers-color-scheme: dark");
+    expect(css).not.toContain(":host-context");
   });
 
   it("says when the phone has no room left, and keeps the list on screen", async () => {
@@ -537,5 +646,68 @@ describe("the conversation the plugin is opened in", () => {
     const everything = [...coreA.sent, ...coreB.sent].flatMap((data) => unpacked(data)).concat(coreA.said, coreB.said).join("\n");
     expect(coreB.said).toHaveLength(1);
     for (const chat of [CHAT_A, CHAT_B]) expect(everything).not.toContain(chat);
+  });
+});
+
+describe("what the view paints", () => {
+  const PICTOGRAPH = /\p{Extended_Pictographic}/u;
+  const painted = (element) => inside(element).innerHTML.replace(/<style>[\s\S]*?<\/style>/g, "");
+
+  it("has no emoji and no <form> in any state or language, only icons, and the buttons keep their labels", async () => {
+    for (const lang of ["en", "es", "ar", "ja"]) {
+      document.body.innerHTML = "";
+      const seen = [];
+      const core = fakeCore({ lang });
+      const element = await phone(core, { live: true, chat: CHAT_A });
+      seen.push(painted(element));
+      await fill(element, "new", "Compra");
+      await fill(element, "add", "leche");
+      await fill(element, "add", "pan");
+      await press(element, "toggle", `[data-id="${itemId(element, "pan")}"]`);
+      seen.push(painted(element));
+      const live = inside(element).querySelector('[data-act="live"]');
+      expect(live.getAttribute("aria-label")).toBeTruthy();
+      expect(live.querySelector('[data-icon="sync-outline"]')).not.toBeNull();
+      expect(inside(element).querySelector('[data-act="send"]').getAttribute("aria-label")).toBeTruthy();
+      const icons = { waiting: "sync-outline", joined: "sync-outline", silent: "person-outline", unreachable: "cloud-offline-outline", left: "person-outline", outdated: "download-outline" };
+      for (const [status, name] of Object.entries(icons)) {
+        element.status = status;
+        element.paintStatus();
+        expect(inside(element).querySelector(`[data-status] [data-icon="${name}"]`), status).not.toBeNull();
+        seen.push(painted(element));
+      }
+      element.keeper.full = true;
+      element.paintWarning();
+      expect(inside(element).querySelector('[data-warning] [data-icon="alert-circle-outline"]')).not.toBeNull();
+      seen.push(painted(element));
+      element.keeper.full = false;
+      element.paintWarning();
+      element.invite = { message: {}, name: "Compra" };
+      element.paintInvite();
+      expect(inside(element).querySelector('[data-invite] [data-icon="person-outline"]')).not.toBeNull();
+      seen.push(painted(element));
+      element.invite = null;
+      element.paintInvite();
+      await press(element, "edit", `[data-id="${itemId(element, "leche")}"]`);
+      seen.push(painted(element));
+      await press(element, "cancelEdit");
+      await press(element, "rename");
+      seen.push(painted(element));
+      element.list.shared = true;
+      await element.keeper.save(element.list);
+      await press(element, "back");
+      expect(inside(element).querySelector('[data-act="open"] [data-icon="sync-outline"]')).not.toBeNull();
+      seen.push(painted(element));
+      await press(element, "delete");
+      seen.push(painted(element));
+
+      document.body.innerHTML = "";
+      const alone = await phone(fakeCore({ lang }), { live: false });
+      seen.push(painted(alone));
+      await fill(alone, "new", "Solo");
+      seen.push(painted(alone));
+      for (const html of seen) expect(html, lang).not.toMatch(PICTOGRAPH);
+      for (const html of seen) expect(html, lang).not.toMatch(/<form\b/i);
+    }
   });
 });
