@@ -71,7 +71,8 @@ describe("the manifest and the catalogue", () => {
     expect(manifest).toEqual({
       id: "com.flickertalk.list",
       name: "List",
-      version: "1.0.1",
+      version: "1.0.2",
+      icon: "list-outline",
       minCoreVersion: "1.3.0",
       components: ["ft-list"],
       permissions: { live: true, send: "propose" },
