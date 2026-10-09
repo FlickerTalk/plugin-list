@@ -22,68 +22,69 @@ const t = makeT(STRINGS);
 const escape = (text) =>
   String(text).replace(/[&<>"']/g, (one) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[one]);
 
+// Ionic draws the window (the app lends it to the frame, app 1.6.0): header, toolbars, buttons, the
+// tick boxes and the scrolling content. This is only what is the list's own, with the app's colours
+// through Ionic's variables.
 const STYLE = `
-:host { display: block; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --done: #8a8a8a; }
-@media (prefers-color-scheme: dark) { :host { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --done: #888; } }
-:host([dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --done: #888; }
-* { box-sizing: border-box; }
-.bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
-.grow { flex: 1; min-width: 0; }
-h1 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
-.head { padding: 4px 0 8px; }
-.head [data-title-row] { padding: 2px 0 6px; }
-.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.actions [data-act="close"] { margin-inline-start: auto; }
-button {
+ft-list { display: flex; flex-direction: column; height: 100%; font: 15px system-ui, sans-serif; color: var(--ion-text-color, #111); --paper: var(--ion-background-color, #fff); --line: var(--ion-border-color, #d8d8d8); --soft: var(--ion-color-medium, #666); --accent: var(--ion-color-danger, #e0562b); --done: var(--ion-color-medium, #8a8a8a); }
+@media (prefers-color-scheme: dark) { ft-list { color: var(--ion-text-color, #f4f4f4); --paper: var(--ion-background-color, #111); --line: var(--ion-border-color, #3a3a3a); --soft: var(--ion-color-medium, #aaa); --done: var(--ion-color-medium, #888); } }
+ft-list[dark] { color: var(--ion-text-color, #f4f4f4); --paper: var(--ion-background-color, #111); --line: var(--ion-border-color, #3a3a3a); --soft: var(--ion-color-medium, #aaa); --done: var(--ion-color-medium, #888); }
+ft-list * { box-sizing: border-box; }
+ft-list ion-content { flex: 1; }
+ft-list h1 { font-size: 18px; margin: 0; padding: 8px 16px; overflow-wrap: anywhere; }
+ft-list .actions { flex-wrap: wrap; }
+ft-list button {
   appearance: none; border: 1px solid currentColor; background: transparent; color: inherit;
   border-radius: 10px; min-width: 44px; min-height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
 }
-button.on { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
-button.danger { color: var(--accent); }
-button.plain { border: 0; }
-.i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
-.i.svg { background: none; -webkit-mask: none; mask: none; fill: currentColor; }
-.labelled { display: inline-flex; gap: 6px; align-items: center; }
-.labelled .i { margin: 0; width: 20px; height: 20px; }
-.line { display: flex; gap: 6px; align-items: flex-start; }
-.line .i, .meta .i, .invite .i { flex: none; width: 18px; height: 18px; margin: 1px 0 0; }
-.meta .i { display: inline-block; vertical-align: -3px; }
-.view { max-inline-size: 640px; margin-inline: auto; }
-.field { display: flex; gap: 6px; align-items: center; margin: 0; }
-.field.wide { flex: 1; }
-input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
-ul { list-style: none; margin: 8px 0 0; padding: 0; }
-li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); min-height: 52px; }
-li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
-.title { font-weight: 600; }
-.meta { color: var(--soft); font-size: 13px; }
-.check { width: 44px; height: 44px; padding: 0; border: 0; opacity: 1; flex: none; display: grid; place-items: center; }
-.check .box { display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid currentColor; border-radius: 8px; }
-.check .i { width: 20px; height: 20px; }
-.text { flex: 1; overflow-wrap: anywhere; padding: 8px 0; }
-[data-done="true"] .text { text-decoration: line-through; color: var(--done); }
-[data-done="true"] .check { color: var(--done); }
-.status, .hint, .warn, .note { margin: 4px 0; }
-.status:empty, .warn:empty, .note:empty { display: none; }
-.hint, .note { color: var(--soft); font-size: 13px; }
-.warn { color: var(--accent); }
-.invite { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; margin: 4px 0; }
-.invite:empty { display: none; }
-.invite span { flex: 1; min-width: 60%; }
-.confirm { flex-wrap: wrap; padding: 8px 0; }
-.confirm span { flex: 1 1 100%; }
-.empty { color: var(--soft); text-align: center; padding: 40px 0; }
+ft-list .i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
+ft-list .i.svg { background: none; -webkit-mask: none; mask: none; fill: currentColor; }
+ft-list .labelled { display: inline-flex; gap: 6px; align-items: center; }
+ft-list .labelled .i { margin: 0; width: 20px; height: 20px; }
+ft-list .line { display: flex; gap: 6px; align-items: flex-start; }
+ft-list .line .i, ft-list .meta .i, ft-list .invite .i { flex: none; width: 18px; height: 18px; margin: 1px 0 0; }
+ft-list .meta .i { display: inline-block; vertical-align: -3px; }
+ft-list .view { max-inline-size: 640px; margin-inline: auto; padding: 0 8px 16px; }
+ft-list .field { display: flex; gap: 6px; align-items: center; margin: 0; }
+ft-list .field.wide { flex: 1; }
+ft-list [data-title-row] .field { padding: 4px 8px; }
+ft-list input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
+ft-list ul { list-style: none; margin: 8px 0 0; padding: 0; }
+ft-list li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); min-height: 52px; }
+ft-list li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
+ft-list .title { font-weight: 600; }
+ft-list .meta { color: var(--soft); font-size: 13px; }
+ft-list button.plain { border: 0; }
+ft-list .check { width: 44px; height: 44px; padding: 0; border: 0; opacity: 1; flex: none; display: grid; place-items: center; }
+ft-list .check .box { display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid currentColor; border-radius: 8px; }
+ft-list .check .i { width: 20px; height: 20px; }
+ft-list [data-done="true"] .check { color: var(--done); }
+ft-list .text { flex: 1; overflow-wrap: anywhere; padding: 8px 0; }
+ft-list [data-done="true"] .text { text-decoration: line-through; color: var(--done); }
+ft-list .status, ft-list .hint, ft-list .warn, ft-list .note { margin: 4px 0; }
+ft-list .status:empty, ft-list .warn:empty, ft-list .note:empty { display: none; }
+ft-list .hint, ft-list .note { color: var(--soft); font-size: 13px; }
+ft-list .warn { color: var(--accent); }
+ft-list .invite { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; margin: 4px 0; }
+ft-list .invite:empty { display: none; }
+ft-list .invite span { flex: 1; min-width: 60%; }
+ft-list .confirm { flex-wrap: wrap; padding: 8px 0; }
+ft-list .confirm span { flex: 1 1 100%; }
+ft-list .empty { color: var(--soft); text-align: center; padding: 40px 0; }
 `;
 
 /** A line of text with its icon beside it; the icon is decoration, the text says it all. */
 const line = (name, text) => (text ? `${icon(name)}<span>${escape(text)}</span>` : "");
-const button = (act, label, name, extra = "") => `<button type="button" data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name)}</button>`;
+/** An Ionic button with an icon only. */
+const button = (act, label, name, extra = "") =>
+  `<ion-button fill="clear" data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name, { slot: "icon-only" })}</ion-button>`;
+/** The button that commits a field: its click, or Enter in the field (no <form>, see below). */
+const commit = (label, name) => `<ion-button fill="clear" data-act="commit" aria-label="${escape(label)}">${icon(name, { slot: "icon-only" })}</ion-button>`;
 
 /** The plugin's view: the lists this phone keeps, or one list. */
 class ListElement extends HTMLElement {
   constructor() {
     super();
-    this.root = this.attachShadow({ mode: "open" });
     // Not `this.lang`: it reflects to the `lang` attribute, and a constructor may set none.
     this.language = "en";
     this.mayLive = false;
@@ -105,11 +106,15 @@ class ListElement extends HTMLElement {
   connectedCallback() {
     this.ft = globalThis.ft;
     this.inbox = new Inbox(FORMAT);
-    this.root.innerHTML = `<style>${STYLE}</style><div class="view"></div>`;
-    this.view = this.root.querySelector(".view");
-    this.root.addEventListener("click", (event) => this.onClick(event));
-    this.root.addEventListener("keydown", (event) => this.onKey(event));
+    // In the page, not in a shadow root: the frame holds only this plugin, and Ionic's global
+    // styles do not cross a shadow boundary. `view` is the element itself: each screen is a
+    // header and a content of its own.
+    this.view = this;
+    this.addEventListener("click", (event) => this.onClick(event));
+    this.addEventListener("keydown", (event) => this.onKey(event));
     this.ft.onOpen((opening) => this.onOpen(opening));
+    // The way out is the app's ✕ (or Android's Back): the goodbye to the twin goes then.
+    this.ft.onClose?.(() => this.leave());
     // The frame does not wait for one message to be handled before handing the next.
     this.ft.live?.onMessage?.(inOrder((data) => this.onLive(data)));
     this.paint();
@@ -289,13 +294,10 @@ class ListElement extends HTMLElement {
   // form submission before any `submit` event. A field commits on its button's click or on Enter.
 
   async onClick(event) {
-    const target = event.target.closest("button[data-act]");
+    const target = event.target.closest("[data-act]");
     if (!target) return;
     const { act, id } = target.dataset;
     switch (act) {
-      case "close":
-        await this.leave();
-        return this.ft.close();
       case "back":
         return this.home();
       case "open":
@@ -414,7 +416,7 @@ class ListElement extends HTMLElement {
 
   paint() {
     if (!this.view) return;
-    this.view.innerHTML = this.screen === "list" && this.list ? this.listScreen() : this.homeScreen();
+    this.view.innerHTML = `<style>${STYLE}</style>${this.screen === "list" && this.list ? this.listScreen() : this.homeScreen()}`;
     if (this.screen === "list") {
       this.paintHeader();
       this.paintStatus();
@@ -431,8 +433,8 @@ class ListElement extends HTMLElement {
         const name = meta.name || T("untitled");
         if (this.confirming === meta.id) {
           return `<li class="confirm"><span>${escape(T("confirmDelete", { name }))}</span>
-            <button type="button" class="danger" data-act="confirmDelete" data-id="${escape(meta.id)}">${escape(T("delete"))}</button>
-            <button type="button" data-act="cancelDelete">${escape(T("cancel"))}</button></li>`;
+            <ion-button color="danger" data-act="confirmDelete" data-id="${escape(meta.id)}">${escape(T("delete"))}</ion-button>
+            <ion-button fill="outline" data-act="cancelDelete">${escape(T("cancel"))}</ion-button></li>`;
         }
         const progress = T("progress", { done: this.number(meta.done ?? 0), total: this.number(meta.total ?? 0) });
         const shared = meta.shared ? ` · ${icon("sync-outline")} ${escape(T("shared"))}` : "";
@@ -441,24 +443,28 @@ class ListElement extends HTMLElement {
       })
       .join("");
     return `
-      <div class="bar"><h1 class="grow">${escape(T("title"))}</h1>${button("close", T("close"), "close-outline")}</div>
-      <div class="field" data-field="new"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" placeholder="${escape(T("namePlaceholder"))}" aria-label="${escape(T("newList"))}"><button type="button" data-act="commit" aria-label="${escape(T("newList"))}">${icon("add-outline")}</button></div>
+      <ion-header><ion-toolbar><ion-title>${escape(T("title"))}</ion-title></ion-toolbar></ion-header>
+      <ion-content><div class="view">
+      <div class="field" data-field="new"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" placeholder="${escape(T("namePlaceholder"))}" aria-label="${escape(T("newList"))}">${commit(T("newList"), "add-outline")}</div>
       ${this.place === LOCAL_PLACE ? `<p class="hint" data-hint>${escape(T("localHint"))}</p>` : ""}
-      ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}`;
+      ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}
+      </div></ion-content>`;
   }
 
   listScreen() {
     const T = (key) => this.T(key);
     const list = this.list;
     return `
-      <div class="head" data-header></div>
+      <ion-header data-header></ion-header>
+      <ion-content><div class="view">
       <p class="status line" data-status aria-live="polite"></p>
       <p class="hint line" data-hint>${this.mayLive ? line("sync-outline", T("liveHint")) : escape(T("needsChat"))}</p>
       <p class="warn line" data-warning role="alert"></p>
       <p class="note line">${list.readOnly ? line("download-outline", T("readOnly")) : ""}</p>
       <div class="invite" data-invite></div>
-      ${list.readOnly ? "" : `<div class="field" data-field="add"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="button" data-act="commit" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></div>`}
-      <ul data-items></ul>`;
+      ${list.readOnly ? "" : `<div class="field" data-field="add"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}">${commit(T("add"), "add-outline")}</div>`}
+      <ul data-items></ul>
+      </div></ion-content>`;
   }
 
   paintHeader() {
@@ -469,19 +475,25 @@ class ListElement extends HTMLElement {
     const name = list.name || this.pendingTitle || T("untitled");
     const live = this.session && (this.status === "joined" || this.status === "waiting");
     const title = this.renaming
-      ? `<div class="field wide" data-field="rename"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" value="${escape(list.name)}" aria-label="${escape(T("rename"))}"><button type="button" data-act="commit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></div>`
+      ? `<div class="field wide" data-field="rename"><input name="value" maxlength="${MAX_NAME}" autocomplete="off" value="${escape(list.name)}" aria-label="${escape(T("rename"))}">${commit(T("save"), "checkmark-outline")}</div>`
       : `<h1 data-name>${escape(name)}</h1>`;
-    // The title has its own line, whole: on a narrow phone a row shared with five buttons left
-    // it two letters wide. The buttons wrap on the line below.
-    header.innerHTML = `
-      <div data-title-row>${title}</div>
-      <div class="actions" data-actions>
-      ${button("back", T("back"), "arrow-back-outline")}
+    // The title has its own toolbar, whole: on a narrow phone a row shared with five buttons left
+    // it two letters wide (and Ionic centres a title over the buttons on iOS). The buttons go in
+    // the toolbar below. A new header in place of the old one, rather than new children in it:
+    // Ionic keeps its own bookkeeping of what is inside a header.
+    const fresh = document.createElement("ion-header");
+    fresh.dataset.header = "";
+    fresh.innerHTML = `
+      <ion-toolbar data-title-row>${title}</ion-toolbar>
+      <ion-toolbar data-actions>
+      <ion-buttons slot="start">${button("back", T("back"), "arrow-back-outline")}</ion-buttons>
+      <ion-buttons slot="end" class="actions">
       ${!this.renaming && !list.readOnly ? button("rename", T("rename"), "pencil-outline") : ""}
-      ${this.mayLive && !list.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}"><span class="labelled">${icon("sync-outline")}${escape(T("live"))}</span></button>` : ""}
+      ${this.mayLive && !list.readOnly ? `<ion-button data-act="live" fill="${live ? "solid" : "clear"}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}"><span class="labelled">${icon("sync-outline")}${escape(T("live"))}</span></ion-button>` : ""}
       ${this.place !== LOCAL_PLACE ? button("send", T("send"), "send-outline") : ""}
-      ${button("close", T("close"), "close-outline")}
-      </div>`;
+      </ion-buttons>
+      </ion-toolbar>`;
+    header.replaceWith(fresh);
   }
 
   paintStatus() {
@@ -513,8 +525,8 @@ class ListElement extends HTMLElement {
       return;
     }
     node.innerHTML = `${icon("person-outline")}<span>${escape(this.T("joinPrompt", { name: this.invite.name }))}</span>
-      <button type="button" data-act="join">${escape(this.T("join"))}</button>
-      <button type="button" data-act="notNow">${escape(this.T("notNow"))}</button>`;
+      <ion-button data-act="join">${escape(this.T("join"))}</ion-button>
+      <ion-button fill="outline" data-act="notNow">${escape(this.T("notNow"))}</ion-button>`;
   }
 
   paintItems() {
@@ -527,17 +539,19 @@ class ListElement extends HTMLElement {
     const entries = this.list.entries();
     if (this.editing && !entries.some((one) => one.id === this.editing)) this.editing = null;
     const typing = node.querySelector('[data-field="edit"] input');
-    const draft = typing && typing.closest("li")?.dataset.editing === this.editing ? { value: typing.value, focused: this.root.activeElement === typing } : null;
+    const draft = typing && typing.closest("li")?.dataset.editing === this.editing ? { value: typing.value, focused: document.activeElement === typing } : null;
     const T = (key) => this.T(key);
     const readOnly = this.list.readOnly;
     node.innerHTML = entries
       .map((one) => {
         if (one.id === this.editing && !readOnly) {
-          return `<li data-editing="${escape(one.id)}"><div class="field wide" data-field="edit"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" value="${escape(one.text)}" aria-label="${escape(T("edit"))}"><button type="button" data-act="commit" aria-label="${escape(T("save"))}">${icon("checkmark-outline")}</button></div>
-            ${button("remove", T("remove"), "trash-outline", 'class="danger"')}${button("cancelEdit", T("cancel"), "close-outline")}</li>`;
+          return `<li data-editing="${escape(one.id)}"><div class="field wide" data-field="edit"><input name="value" maxlength="${MAX_TEXT}" autocomplete="off" value="${escape(one.text)}" aria-label="${escape(T("edit"))}">${commit(T("save"), "checkmark-outline")}</div>
+            ${button("remove", T("remove"), "trash-outline", 'color="danger"')}${button("cancelEdit", T("cancel"), "close-outline")}</li>`;
         }
+        // The rows stay plain buttons: every change repaints them all, and a long list would make
+        // hundreds of Ionic components each time.
         const check = `<button type="button" class="check" data-act="toggle" data-id="${escape(one.id)}" role="checkbox" aria-checked="${one.done}" aria-label="${escape(one.text)}" ${readOnly ? "disabled" : ""}><span class="box">${one.done ? icon("checkmark-outline") : ""}</span></button>`;
-        const edit = readOnly ? "" : button("edit", T("edit"), "pencil-outline", `class="plain" data-id="${escape(one.id)}"`);
+        const edit = readOnly ? "" : `<button type="button" class="plain" data-act="edit" aria-label="${escape(T("edit"))}" data-id="${escape(one.id)}">${icon("pencil-outline")}</button>`;
         return `<li data-item="${escape(one.id)}" data-done="${one.done}">${check}<span class="text">${escape(one.text)}</span>${edit}</li>`;
       })
       .join("");
