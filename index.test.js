@@ -31,7 +31,15 @@ async function phone(core, opening = { live: true, chat: CHAT_A }) {
   return element;
 }
 
-const inside = (element) => element.shadowRoot;
+// In the page, not in a shadow root: Ionic's global styles do not cross a shadow boundary.
+const inside = (element) => element;
+// Ionic moves a button's label to the native button inside it once it has drawn.
+const label = (one) => one?.getAttribute("aria-label") ?? one?.shadowRoot?.querySelector("button")?.getAttribute("aria-label") ?? null;
+/** The app's ✕ (there is none in the plugin): its goodbye runs, then the window goes. */
+async function closeWindow(element, core) {
+  await core.closeWindow();
+  await settle(element);
+}
 const settle = async (...elements) => {
   await flush();
   for (const element of elements) await element.keeper.settled();
@@ -54,7 +62,7 @@ async function fill(element, field, value, { by = "click", composing = false } =
   const input = node.querySelector("input");
   input.value = value;
   if (by === "enter") input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: composing, bubbles: true, composed: true, cancelable: true }));
-  else node.querySelector('button[data-act="commit"]').click();
+  else node.querySelector('[data-act="commit"]').click();
   await settle(element);
 }
 const rows = (element) => [...inside(element).querySelectorAll("[data-item]")].map((row) => `${row.dataset.done === "true" ? "☑" : "☐"} ${row.querySelector(".text").textContent}`);
@@ -67,13 +75,13 @@ afterEach(() => {
 });
 
 describe("the manifest and the catalogue", () => {
-  it("asks for live and to propose a text, nothing more, on core 1.3.0 (the one that says the chat)", () => {
+  it("asks for live and to propose a text, nothing more, on core 1.6.0 (the one that lends Ionic)", () => {
     expect(manifest).toEqual({
       id: "com.flickertalk.list",
       name: "List",
-      version: "1.0.2",
+      version: "1.0.3",
       icon: "list-outline",
-      minCoreVersion: "1.3.0",
+      minCoreVersion: "1.6.0",
       components: ["ft-list"],
       permissions: { live: true, send: "propose" },
       summary: expect.any(String),
@@ -175,8 +183,8 @@ describe("one phone", () => {
     expect(titleRow).not.toBeNull();
     expect(actions).not.toBeNull();
     expect(titleRow.querySelector("[data-name]").textContent).toBe(long);
-    expect(titleRow.querySelector("button")).toBeNull();
-    for (const act of ["back", "rename", "live", "send", "close"]) expect(actions.querySelector(`[data-act="${act}"]`), act).not.toBeNull();
+    expect(titleRow.querySelector("button, ion-button")).toBeNull();
+    for (const act of ["back", "rename", "live", "send"]) expect(actions.querySelector(`[data-act="${act}"]`), act).not.toBeNull();
     // While renaming, the field takes the title's line, not the buttons'.
     await press(element, "rename");
     expect(inside(element).querySelector('[data-title-row] [data-field="rename"]')).not.toBeNull();
@@ -263,7 +271,7 @@ describe("one phone", () => {
     await core.open({ live: false, dark: false });
     expect(element.hasAttribute("dark")).toBe(false);
     const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
-    expect(css).toContain(":host([dark])");
+    expect(css).toContain("ft-list[dark]");
     expect(css).toContain("prefers-color-scheme: dark");
     expect(css).not.toContain(":host-context");
   });
@@ -419,7 +427,7 @@ describe("two phones", () => {
     await press(a, "live");
     await idle();
     const id = a.list.id;
-    await press(b, "close");
+    await closeWindow(b, coreB);
     await idle();
     expect(coreB.closed).toBe(1);
     expect(statusOf(a)).toContain("closed the list");
@@ -592,8 +600,8 @@ describe("the conversation the plugin is opened in", () => {
     const x = a.list.id;
     const whoA = a.list.who;
     expect(rows(c)).toEqual(["☐ the code is 1234"]);
-    await press(a, "close");
-    await press(c, "close");
+    await closeWindow(a, coreA);
+    await closeWindow(c, coreC);
 
     // C now has List open in the conversation with B. B, with a modified app, says A's resumed hello.
     document.body.innerHTML = "";
@@ -666,6 +674,52 @@ describe("the conversation the plugin is opened in", () => {
   });
 });
 
+describe("with the Ionic the app lends", () => {
+  it("draws the lists in the page, in Ionic's header and content, with no close of its own", async () => {
+    const element = await phone(fakeCore(), { live: true, chat: CHAT_A });
+    expect(element.shadowRoot).toBe(null);
+    expect(element.querySelector(":scope > ion-header > ion-toolbar > ion-title").textContent).toBe("Lists");
+    expect(element.querySelector(':scope > ion-content .view [data-field="new"]')).not.toBeNull();
+    expect(element.querySelector('[data-act="close"]')).toBeNull();
+    expect(element.querySelector('[data-field="new"] [data-act="commit"]').tagName).toBe("ION-BUTTON");
+  });
+
+  it("draws a list with its title and its buttons in two toolbars of the header, Ionic buttons with labels", async () => {
+    const element = await phone(fakeCore(), { live: true, chat: CHAT_A });
+    await fill(element, "new", "Compra");
+    const header = element.querySelector(":scope > ion-header[data-header]");
+    expect(header.querySelector(":scope > ion-toolbar[data-title-row] [data-name]").textContent).toBe("Compra");
+    const actions = header.querySelector(":scope > ion-toolbar[data-actions]");
+    for (const act of ["back", "rename", "live", "send"]) {
+      const button = actions.querySelector(`ion-button[data-act="${act}"]`);
+      expect(button, act).not.toBeNull();
+      expect(label(button), act).toBeTruthy();
+    }
+    expect(element.querySelector('[data-act="close"]')).toBeNull();
+    expect(element.querySelector(':scope > ion-content [data-field="add"]')).not.toBeNull();
+    // The live switch shows itself pressed, with the other phone there.
+    const { a, idle } = await twoPhones();
+    await fill(a, "new", "Compra");
+    await press(a, "live");
+    await idle();
+    const live = a.querySelector('ion-button[data-act="live"]');
+    expect(live.getAttribute("fill")).toBe("solid");
+    // Ionic hands aria-pressed to its native button.
+    expect(live.getAttribute("aria-pressed") ?? live.shadowRoot?.querySelector("button")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("says goodbye to the other phone when the app's window closes", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false });
+    await fill(element, "new", "Compra");
+    let left = 0;
+    const leave = element.leave.bind(element);
+    element.leave = async () => ((left += 1), leave());
+    await closeWindow(element, core);
+    expect(left).toBe(1);
+  });
+});
+
 describe("what the view paints", () => {
   const PICTOGRAPH = /\p{Extended_Pictographic}/u;
   const painted = (element) => inside(element).innerHTML.replace(/<style>[\s\S]*?<\/style>/g, "");
@@ -683,9 +737,9 @@ describe("what the view paints", () => {
       await press(element, "toggle", `[data-id="${itemId(element, "pan")}"]`);
       seen.push(painted(element));
       const live = inside(element).querySelector('[data-act="live"]');
-      expect(live.getAttribute("aria-label")).toBeTruthy();
+      expect(label(live)).toBeTruthy();
       expect(live.querySelector('[data-icon="sync-outline"]')).not.toBeNull();
-      expect(inside(element).querySelector('[data-act="send"]').getAttribute("aria-label")).toBeTruthy();
+      expect(label(inside(element).querySelector('[data-act="send"]'))).toBeTruthy();
       const icons = { waiting: "sync-outline", joined: "sync-outline", silent: "person-outline", unreachable: "cloud-offline-outline", left: "person-outline", outdated: "download-outline" };
       for (const [status, name] of Object.entries(icons)) {
         element.status = status;
