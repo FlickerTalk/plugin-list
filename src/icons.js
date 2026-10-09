@@ -23,8 +23,8 @@ const escape = (text) =>
  * An icon by its Ionicons name. Hidden from screen readers when it only goes with a text or sits
  * in a labelled button; with `label`, it is an image with that name.
  */
-export function icon(name, { label } = {}) {
-  const a11y = label ? `role="img" aria-label="${escape(label)}"` : `aria-hidden="true"`;
+export function icon(name, { label, slot } = {}) {
+  const a11y = (label ? `role="img" aria-label="${escape(label)}"` : `aria-hidden="true"`) + (slot ? ` slot="${slot}"` : "");
   if (APP_ICONS.includes(name)) return `<i class="i" data-icon="${name}" ${a11y} style="--i:url(./icon/${name}.svg)"></i>`;
   const svg = OWN_ICONS[name];
   if (!svg) throw new Error(`not an icon of this plugin: ${name}`);

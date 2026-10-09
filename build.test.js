@@ -54,6 +54,13 @@ describe("the package", () => {
     expect(code).toContain("ft-list");
   });
 
+  // Ionic is the app's, lent to the frame: a copy in the package would be a second one, and heavy.
+  it("carries no Ionic of its own", () => {
+    const code = readFileSync(join(import.meta.dirname, "dist", "index.js"), "utf8");
+    expect(code).not.toMatch(/@ionic\/core|ionicframework|stencil|defineCustomElement|__registerHost/i);
+    expect(code).not.toMatch(/^\s*import\s.*from\s+["'](?!\.\/)/m);
+  });
+
   it("runs as it is: the bundle defines the element and keeps a list through the fake core", async () => {
     const { fakeCore } = await import("./test/fake-core.js");
     const core = fakeCore();
@@ -62,12 +69,12 @@ describe("the package", () => {
     const element = document.createElement("ft-list");
     document.body.append(element);
     await core.open({ live: false });
-    const field = element.shadowRoot.querySelector('[data-field="new"]');
+    const field = element.querySelector('[data-field="new"]');
     field.querySelector("input").value = "Compra";
-    field.querySelector('button[data-act="commit"]').click();
+    field.querySelector('[data-act="commit"]').click();
     for (let at = 0; at < 50; at += 1) await Promise.resolve();
     await element.keeper.settled();
-    expect(element.shadowRoot.querySelector("[data-name]").textContent).toBe("Compra");
+    expect(element.querySelector("[data-name]").textContent).toBe("Compra");
     expect([...core.records.keys()].sort()).toEqual([`list/local/${element.list.id}/body`, `list/local/${element.list.id}/meta`]);
   });
 
