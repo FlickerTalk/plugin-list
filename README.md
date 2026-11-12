@@ -121,6 +121,15 @@ The code is meant to be copied into other plugins as it is:
 | `src/i18n.js`, `test/i18n.test.js` | the 21 languages, holes, RTL, the catalogue check | nothing: the texts live apart |
 | `test/fake-core.js` | the fake core, and two of them joined as two phones | nothing |
 
+The fake core keeps the rules of the real one that a plugin can trip over:
+
+- `ft.records`: values are strings, a key is at most 128 bytes, and a write over the quota answers
+  `false`.
+- `ft.live.send` answers `false` when `onOpen` did not give `live`, when there is no link or it is
+  down, and for a message over 48 KiB once decoded. `true` means the message left, not that anyone got it: if
+  the plugin is not open on the other phone, the message is dropped without a word.
+- `ft.say` and `ft.send` close the plugin, as the app does for a tool.
+
 ## Development
 
 ```sh
